@@ -7,9 +7,9 @@ It is not intended to be the full realisation of the work shown in the title.
 It contains errors which I am trying to correct. It is not complete, but will be expanded.
 ## Installation
 ### Components needed
-- Python 3.x needed
-- mySql Java JDBC
-- "astyle" open source Java formatter
+- Python 3.x  
+- mySql Java JDBC driver (for the in V1.01 installed MySql interface)
+- "astyle" open source Java formatter for a beautified Java output
 ### How to run
 - Tested only under Windows 11
 - Simply copy the plithon.py in your (Windows, see also above) directory
