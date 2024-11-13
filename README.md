@@ -25,6 +25,7 @@ It is a fork of my ***plithon*** PL/I to Python project
 -  put skip list(variable | constant);
 -  one-dimensional arrays are now supported (only integer indexing is possible)
 -  record i/o simple version (open close read write) works
+-  do-while loop
 ## Following features are to be installed in version 1.01:
 -  exec sql "select  sql-select-field" into variable; - only MySQL connection, sample db sakila (sorry, actual are my credentials _hardcoded_)
 -  get list(variable-list); - read variables from console per prompt
