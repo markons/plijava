@@ -1,6 +1,10 @@
 # plijava
 Conversion of PL/I code into similar Java code
-It is a fork of my ***plithon*** PL/I to Python project
+It is a fork of my ***plithon*** PL/I to Python project      
+
+***Important:*** this work is primarily the intermediate result of a learning process. 
+It is not intended to be the full realisation of the work shown in the title. 
+It contains errors which I am trying to correct. It is not complete, but will be expanded.
 ## Installation
 ### Components needed
 - Python 3.x needed
