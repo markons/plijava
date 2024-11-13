@@ -1,0 +1,66 @@
+===PL/I input:================================
+PROG: PROC OPTIONS(MAIN);
+/* multiple lines comment
+two 
+line */
+dcl x fixed bin(15);
+dcl y fixed bin(31);
+dcl z char(10);
+dcl w(5) fixed bin(15);
+  x = 10;
+  if x = 10
+  then
+    put skip list('x=', 10);  
+  else  
+    put skip list('x<>', 10);   
+  x = x + (10 * 2);
+  put skip list('x + 10 * 2 = ', x);   
+end PROG;
+===Java version:============================
+import java.io.FileNotFoundException;
+import java.io.IOException;
+public class PROG { 
+ public static void main(String[] args) throws FileNotFoundException, IOException {
+    int x = 0;
+    long y = 0;
+    String z = " ";
+    int[]  w = new int[7];
+    w[0] = 0; //pseudo-init
+x = 10;
+if (x == 10)
+  System.out.println("x="+ 10);
+else
+  System.out.println("x<>"+ 10);
+x = (x + ((10 * 2)));
+System.out.println("x + 10 * 2 = "+ x);
+} //end main 
+}//end class PROG
+===Execution outputs:==========================
+procedure_name: PROG
+Where is Java:C:\Program Files\Microsoft\jdk-21.0.1.12-hotspot\bin\java.exe
+C:\Windows\System32\java.exe
+
+===Formatted JAVA code:==========================
+import java.io.FileNotFoundException;
+import java.io.IOException;
+public class PROG {
+    public static void main(String[] args) throws FileNotFoundException, IOException {
+        int x = 0;
+        long y = 0;
+        String z = " ";
+        int[]  w = new int[7];
+        w[0] = 0; //pseudo-init
+        x = 10;
+        if (x == 10)
+            System.out.println("x="+ 10);
+        else
+            System.out.println("x<>"+ 10);
+        x = (x + ((10 * 2)));
+        System.out.println("x + 10 * 2 = "+ x);
+    } //end main
+}//end class PROG
+
+
+===Execution result:==========================
+ x=10
+x + 10 * 2 = 30
