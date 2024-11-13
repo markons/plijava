@@ -1,0 +1,18 @@
+PROG: PROC OPTIONS(MAIN);
+/* nested if */
+dcl x fixed bin(15);
+dcl y fixed bin(31);
+  x = 10;
+  y = 11;
+  if x = 10
+  then
+    if y = 11
+	then
+      put skip list('x=10,y=11');  
+	else
+      put skip list('else is none');	
+  else  
+    put skip list('x<>', 10);   
+  x = x + (10 * 2);
+  put skip list('x + 10 * 2 = ', x);   
+end PROG;

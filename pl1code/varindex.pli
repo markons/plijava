@@ -1,0 +1,36 @@
+PROG: PROC OPTIONS(MAIN);
+/* array test with variable as index */
+dcl t(5) fixed bin(15);
+dcl i fixed bin(15);
+dcl f  fixed bin(15);
+dcl e  fixed bin(15);
+
+/* initialize the array content */
+i = 0;
+f = 1;
+do while(f = 1);
+  i = i + 1;
+  t(i) = i + 1;
+  if i = 5
+  then
+    f = 0;
+  else 
+    f = 1;  
+end;
+
+/* now print the array content */
+put skip list('second part...');
+i = 0;
+f = 1;
+do while(f = 1);
+  i = i + 1;
+  e = t(i);
+  put skip list(i, e);
+  if i = 5
+  then
+    f = 0;
+  else 
+    f = 1;  
+end;
+ 
+end PROG;

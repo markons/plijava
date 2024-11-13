@@ -1,0 +1,17 @@
+PROG: PROC OPTIONS(MAIN);
+/* sql statements; connects to the mySql sample database */
+/* mySql installation including sample DB + mySql connector needed */
+/* please store following data in the c:/temp/creds.tx file (here as sample):
+host="localhost", user="root", password="admin", database="sakila"   
+*/   
+dcl x char(10); 
+dcl y   fixed bin(31);   
+  x = 'abc';
+  put skip list('before sqls:');
+  EXEC SQL "SELECT last_name FROM sakila.actor where first_name = 'JENNIFER'" INTO x;
+  x = 'resulting host variable x=' || x;
+  put skip list('JENNIFERs first name:',x); 
+  EXEC SQL "SELECT count(*) FROM sakila.actor" INTO y;
+  put skip list('Nr. of rows in table actor:',y);  
+  put skip list('after sqls'); 
+end PROG;

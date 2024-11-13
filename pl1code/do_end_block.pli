@@ -1,0 +1,17 @@
+PROG: PROC OPTIONS(MAIN);
+dcl x char(20);   
+  if x = ' ' then do;   
+    x = 'thenn'; 
+    x = 'thenn+';
+    put skip list('in then,x=',x);	
+  end;	
+  else do;  
+    x = 'elsse';  
+    put skip list('in else,x=',x);		
+	if x = 'elsse'
+	then
+	  put skip list('once mode else');
+	else  
+	  put skip list('not so good');
+  end;
+end PROG;

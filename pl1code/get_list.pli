@@ -1,0 +1,10 @@
+PROG: PROC OPTIONS(MAIN);
+/* get list, functions for integer/char types */
+dcl x fixed bin(31); 
+dcl y fixed bin(31);
+dcl z fixed bin(15); /* 15 = 31 = precision not implemented */ 
+ get list(x,y);
+ z = x + y;
+ put skip list(z);
+ put skip list('x + y = ', z);
+end PROG;

@@ -1,0 +1,10 @@
+PROG: PROC OPTIONS(MAIN);
+dcl x fixed bin(15);
+  x = 10;
+  
+  do while(x > 0);
+    x = x - 1; 
+    put skip list('x in loop:', x);	
+  end; 
+  put skip list('x after loop:', x);
+end PROG;

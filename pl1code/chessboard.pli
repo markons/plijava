@@ -1,0 +1,41 @@
+prog: proc options(main);
+/* Chessboard program in PL/I */
+dcl i FIXED bin(15);
+dcl j FIXED bin(15);
+dcl k fixed bin(15);
+dcl board(8,8) CHAR(1);
+dcl line  char(8);
+
+i = 1;
+
+/* Fill the board */
+DO WHILE(i <= 8);
+  j = 1;
+  DO WHILE(j <= 8);
+    k = i + j;
+    IF mod(k,2) = 0 THEN
+       board(i,j) = '_';
+    ELSE
+       board(i,j) = 'X';
+    j = j + 1;
+  END;
+  i = i + 1;
+END;
+
+/* Output the board */
+i = 1;
+line = ''; 
+DO WHILE(i <= 8);      
+    line = line || board(i,1);	
+	line = line || board(i,2);
+	line = line || board(i,3);
+	line = line || board(i,4);
+	line = line || board(i,5);
+	line = line || board(i,6);
+	line = line || board(i,7);
+	line = line || board(i,8);  
+    PUT SKIP LIST(line);
+    i = i + 1;
+	line = '';
+END;
+end prog;

@@ -1,0 +1,18 @@
+PROG: PROC OPTIONS(MAIN);  
+  dcl y fixed bin(15);
+  dcl x(5) fixed bin(15);
+  dcl z(2,2) fixed bin(15);
+  put skip list('*** Test arrays, one and two dimensional ***');
+  /*
+  put skip list('one-dimensional fixed bin array test');
+  x(1) = 1; 
+  put skip list(1);
+  y = x(1) + 1;
+  put skip list('x(1)+y, where x(1)=1:',y);  
+  
+  put skip list('two-dimensional fixed bin array test');
+  */
+  z(1,1) = 11;         
+  put skip list('result z(1,1):', z(1,1));  
+  
+end PROG;

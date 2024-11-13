@@ -1,0 +1,23 @@
+PROG: PROC OPTIONS(MAIN);
+dcl x fixed bin(15);
+dcl y fixed bin(31);
+dcl z char(10);
+  x = 10;
+  if x = 1 then put skip list(2); else x = 3;
+  put skip list('x before select:', x);
+  select(x);
+    when(10) do;
+      put skip list('ten is OK-1!');
+	  put skip list('ten is OK-2!');
+	end;  
+    when(20)
+      put skip list('twenty is more OK!');   
+    when(30)
+      put skip list('twenty is +more OK!');     
+    other do;
+      put skip list('three is the best_1');
+	  put skip list('three is the best_2');
+	end;  
+  end;  
+  put skip list('end select');   
+end PROG;

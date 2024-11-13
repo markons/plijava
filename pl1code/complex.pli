@@ -1,0 +1,19 @@
+PROG: PROC OPTIONS(MAIN);
+/* sql statements; connects to the mySql sample database. record-io writes the results */
+dcl x char(10); 
+dcl y   fixed bin(31);   
+  x = 'abc';
+  put skip list('before sqls:');
+  EXEC SQL "SELECT last_name FROM sakila.actor where first_name = 'JENNIFER'" INTO x;
+  x = 'resulting host variable x=' || x;  
+  put skip list('JENNIFERs first name:',x); 
+  EXEC SQL "SELECT count(*) FROM sakila.actor" INTO y;
+  put skip list('Nr. of rows in table actor:',y);  
+  open file('ofile') output;
+  string_var = 'Jennifers first name is' || x;
+  write file('ofile') from(string_var); 
+  string_var = 'Number of rows in the table SAKILA.ACTOR:' || decimal(y);
+  write file('ofile') from(string_var);   
+  close file('ofile');
+  put skip list('after sqls'); 
+end PROG;

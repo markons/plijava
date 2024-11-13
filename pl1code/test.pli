@@ -1,0 +1,20 @@
+PROG: PROC OPTIONS(MAIN);
+/* multiple lines comment
+two 
+line */
+dcl x fixed bin(15);
+dcl y fixed bin(31);
+dcl z char(10);
+dcl s char(100);
+  x = 10;
+  if x = 10
+  then
+    put skip list('x=', 10);  
+  else  
+    put skip list('x<>', 10);   
+  x = x + (10 * 2);
+  put skip list('x + 10 * 2 = ', x);   
+  s = 'abc';
+  s = s || s;
+  put skip list(s);
+end PROG;
