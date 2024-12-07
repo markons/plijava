@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 PROG: PROC OPTIONS(MAIN);
 /* get list, functions for integer/char types */
 dcl x fixed bin(31); 
@@ -8,3 +9,25 @@ dcl z fixed bin(15); /* 15 = 31 = precision not implemented */
  put skip list(z);
  put skip list('x + y = ', z);
 end PROG;
+=======
+get_list: PROC OPTIONS(MAIN);
+/* get list, functions for integer/char types 
+IMPORTANT: execute Java code as a console app,
+it prompts for console inputs!
+*/
+dcl x fixed bin(15); 
+dcl y fixed bin(15);
+dcl z fixed bin(15); /* 15 = 31 = precision not implemented */ 
+dcl a  char(10);
+dcl b char(30);
+ put skip list('***running get_list, run it as a console app!***');
+ get list(x,y);
+ z = x + y;
+ put skip list(z);
+ put skip list('x + y = ', z);
+ put skip list('enter your name:');
+ get list(a);
+ b = 'Hello ' + a + '!';
+ put skip list(b);
+end get_list;
+>>>>>>> master

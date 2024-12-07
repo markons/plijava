@@ -1,0 +1,22 @@
+db2sql: PROC OPTIONS(MAIN);
+
+/* test the sql access for db2 */
+
+/* sql statements; connects to the mySql sample database */
+/* mySql installation including sample DB + mySql connector needed */
+/* please store following data in the c:/temp/creds.tx file (here as sample):
+host="localhost", user="root", password="admin", database="sakila"   
+*/   
+dcl x char(10); 
+dcl y fixed bin(31);  
+  put skip list('*** execute program >sql_db2< ***');
+  x = 'abc';
+  put skip list('before sqls>>>');
+  EXEC SQL "SELECT firstnme FROM maga1.employee where lastname = 'YOSHIMURA'" INTO x;  
+  put skip list('YOSHIMURAs first name:',x);  
+   
+  EXEC SQL "SELECT count(*) FROM maga1.employee" INTO y;  
+  put skip list('Nr.of rows in employee:',y);   
+  
+  put skip list('<<<after sqls'); 
+end db2sql;
