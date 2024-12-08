@@ -1,27 +1,3 @@
-<<<<<<< HEAD
-PROG: proc options(main);
-/* infile.txt must exist in the same directory as the executed code */    
-    dcl string        char(100);
-	dcl string_var    char(100);
-	dcl eof       fixed bin(15);
-	eof = 0;
-	open file('infile') input;
-	do while(eof = 0);
-      read file('infile') into(string);  	   
-	  if string = null
-	  then
-	    eof = 1;
-	  else 
-        put skip list(string); /* test comment */	
-      put skip list('after if-else');  		
-    end;
-    close file('infile');
-    open file('ofile') output;
-    string_var = 'gfgdfgdfgsfg';
-    write file('ofile') from(string_var);  
-    close file('ofile');
-end PROG;
-=======
 record_io: proc options(main);
 /* infile.txt must exist in the same directory as the executed code */    
     dcl string        char(100);
@@ -45,4 +21,3 @@ record_io: proc options(main);
     write file('ofile') from(string_var);  
     close file('ofile');
 end record_io;
->>>>>>> master

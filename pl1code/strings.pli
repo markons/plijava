@@ -1,18 +1,3 @@
-<<<<<<< HEAD
-PROG: PROC OPTIONS(MAIN);
-/* concatenation, substr, index */
-dcl x char(10); 
-dcl y fixed bin(31);
-  x = 'abc';
-  put skip list('x before concat:', x);
-  x = x || '-xyz';
-  put skip list('x after concat:', x);
-  x = substr(x,2,2);
-  put skip list('x after substr(x,2,2):', x);
-  y = index(x,'c');
-  put skip list('y after index(x,c):', y);
-end PROG;  
-=======
 strings: PROC OPTIONS(MAIN);
 /* test concatenation, substr, index */
 dcl x char(10); 
@@ -27,4 +12,4 @@ put skip list('***running strings***');
   y = index(x,'c');
   put skip list('y after index(x,c):', y);
 end strings;  
->>>>>>> master
+

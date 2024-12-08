@@ -1,15 +1,3 @@
-<<<<<<< HEAD
-PROG: PROC OPTIONS(MAIN);
-dcl x fixed bin(15);
-  x = 10;
-  
-  do while(x > 0);
-    x = x - 1; 
-    put skip list('x in loop:', x);	
-  end; 
-  put skip list('x after loop:', x);
-end PROG;
-=======
 dowhile: PROC OPTIONS(MAIN);
 /* test do_while loop */
 dcl x fixed bin(15);
@@ -21,4 +9,4 @@ dcl x fixed bin(15);
   end; 
   put skip list('x after loop:', x);
 end dowhile;
->>>>>>> master
+
