@@ -1,0 +1,3 @@
+#All parameters are COMPOLSURY. Beware the syntax: name="value", <= space after comma!
+dbsys="db2", jdbc_path="C:/apps/plijava/db2jcc4.jar", port="25000", host="localhost", user="maga1", password="mehuskam", database="sample1"
+#dbsys="mysql", jdbc_path="C:/apps/plijava/mysql-connector-j-9.0.0.jar", port="3306", host="localhost", user="root", password="admin", database="sakila"
