@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """
 Created on Tue Nov  5 17:15:13 2024
 
 @author: maga1
-"""
+"""  
 
-# Version 1.00
+# Version 1.02
 # =============================================================================
 # A fork of the plithon PL/I to Python transpiler to generate Java code
 # =============================================================================
@@ -23,9 +22,9 @@ Created on Tue Nov  5 17:15:13 2024
 #   5  if relational-expression then statement else statement;
 #   6  select(expression) when(value) statement; other statement; end; 
 #   7  put skip list(variable | constant);
-#   8  exec sql "select  sql-select-field" into variable; - only MySQL connection, sample db sakila
-#   9  get list(variable-list); - read variables from console per prompt
-#  10  one-dimensional arrays are now supported (only integer indexing is possible)
+#   8  exec sql "select  sql-select-field" into variable; only mySql, Db2 LUW are supported 
+#   9  still dont work: get list(variable-list); - read variables from console per prompt
+#  10  two-dimensional arrays are now supported (only integer indexing is possible)
 #  11  record i/o simple version (open close read write) works
 # ============================================================================= 
 # =============================================================================
@@ -35,22 +34,19 @@ Created on Tue Nov  5 17:15:13 2024
 # Now you can set up your PLY parser
 import ply.lex as lex
 import ply.yacc as yacc
-
 import sys, os
-
 from datetime import datetime
 
-level=1
+level=1 #irrelevant, must be deleted
 
 procedure_name = ""
 
 # Getting the current date and time
 dt = datetime.now()
-
 # getting the timestamp
 ts = datetime.timestamp(dt)
-
 print('start at:', dt)
+
 # List of token names
 tokens = (
     'ID', 'INDEXED_ID', 'NUMBER', 'CHAR_CONST', 'ASSIGN',
@@ -85,7 +81,7 @@ t_CONCAT = r'\|\|'
 t_EXEC = r'EXEC'
 t_SQL = r'SQL'
 t_INTO = r'INTO'
-
+ 
 
 # Reserved keywords
 reserved = {
@@ -136,36 +132,14 @@ def enablePrint():
     sys.stdout = sys.__stdout__
 
 # Disable print for production version
-#blockPrint()
-
-# Identifier with array-like indexing, e.g., z(1,1)
-# def t_INDEXED_ID(t):
-#     r'[a-zA-Z_][a-zA-Z_0-9]*\(\d+(,\d+)*\)'
-#     print('in indexed_id:', t, flush=True)
-#     # Check if the identifier without the indexing part is a reserved word
-#     identifier_without_index = t.value.split('(')[0]  # Remove the indexing part    
-#     print('lower:', identifier_without_index, flush=True) 
-#     if identifier_without_index.lower() not in reserved:
-#         t.type = 'INDEXED_ID'
-#     else:
-#         # If it's a reserved word, let the lexer handle it as a regular identifier
-#         t.type = reserved.get(identifier_without_index.lower(), 'ID')
-#     print('t.type:', t.type, flush=True)    
-#     return t
-
-# def t_INDEXED_ID(t):
-#     r'[a-zA-Z_][a-zA-Z_0-9]*\(\d+(,\d+)*\)'
-#     print('in indexed_id:', t, flush=True)
-#     # No need to check reserved words as this pattern can't match reserved words
-#     print('end ID:', t, flush=True)
-#     return t
+blockPrint()
 
 #  Identifiers (variables)
 def t_ID(t):
     r'[a-zA-Z_][a-zA-Z_0-9]*'   
-    print('in ID:', t, flush=True)
+    # print('in ID:', t, flush=True)
     t.type = reserved.get(t.value.lower(), 'ID')  # Check for reserved words     
-    print('end ID:', t.type, flush=True)
+    # print('end ID:', t.type, flush=True)
     return t
 
 # Numbers
@@ -181,7 +155,7 @@ def t_CHAR_CONST(t):
     # Remove outer single quotes, replace inner single quotes with double quotes, and wrap the result in double quotes
     #t.value = '"' + t.value[1:-1].replace("'", '"') + '"'
     t.value = t.value.replace("'", '"')
-    print('end char_const:', t.value, flush=True)
+    # print('end char_const:', t.value, flush=True)
     return t
 
 # file name (strings in single quotes)
@@ -191,12 +165,214 @@ def t_FILENAME(t):
     print('in filename:', t, flush=True)
     return t
 
+
+
+# Java imports
+java_imports = ('import java.io.FileNotFoundException;\n' +                 
+                 'import java.io.BufferedReader;\n' +                 
+                 'import java.io.FileReader;\n' +
+                 'import java.io.IOException;\n' +
+                 'import java.sql.*;\n' +
+                 'import java.util.HashMap;\n' +
+                 'import java.util.*;\n' + 
+                 'import java.util.Map;\n' +
+                 'import java.sql.DriverManager;\n' +                 
+                 'import java.util.logging.Logger;\n' +
+                 'import java.net.MalformedURLException;\n' +
+                 'import java.net.URL;\n' + 
+                 'import java.util.Scanner;\n' +
+                 'import java.net.URLClassLoader;'
+                 )
+
+drivershim_class = '''
+// Help class for database access
+static class DriverShim implements Driver {
+	private Driver driver;
+	DriverShim(Driver d) {
+		this.driver = d;
+	}
+	public boolean acceptsURL(String u) throws SQLException {
+		return this.driver.acceptsURL(u);
+	}
+	public Connection connect(String u, Properties p) throws SQLException {
+		return this.driver.connect(u, p);
+	}
+	public int getMajorVersion() {
+		return this.driver.getMajorVersion();
+	}
+	public int getMinorVersion() {
+		return this.driver.getMinorVersion();
+	}
+	public DriverPropertyInfo[] getPropertyInfo(String u, Properties p) throws SQLException {
+		return this.driver.getPropertyInfo(u, p);
+	}
+	public boolean jdbcCompliant() {
+		return this.driver.jdbcCompliant();
+	}
+
+    @Override
+    public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    }
+}
+'''
+
+sql_methods = '''
+// Needed for database access
+public static String executeQuery(
+            String dbsys,  
+            String jdbc_path,  
+            String port,
+            String sql_statement,
+            String host,
+            String dbName,
+            String user,
+            String password)
+            throws
+            MalformedURLException,
+            ClassNotFoundException,
+            InstantiationException,
+            IllegalAccessException {
+        Connection connection = null;
+        Statement statement = null;
+        String result = "";         
+        String classname;
+        URL u;
+        StringBuilder url;
+
+        System.out.println("=========== database call parameters ========="); 
+        System.out.println("dbsys:" + dbsys);
+        System.out.println("jdbc_path:" + jdbc_path);
+        System.out.println("port:" + port);
+        System.out.println("host:" + host);
+        System.out.println("dbname:" + dbName);
+        System.out.println("user:" + user);
+        System.out.println("password:" + password);
+        System.out.println("=========== database call results ============"); 
+
+        
+        switch (dbsys) {
+            case "db2":                    
+                classname = "com.ibm.db2.jcc.DB2Driver";                    
+                url = new StringBuilder("jdbc:db2://");
+                break;
+            case "mysql":                
+                classname = "com.mysql.cj.jdbc.Driver";                    
+                url = new StringBuilder("jdbc:mysql://");
+                break;
+            default:
+                return "E:No database system (db2, mysql) selected";
+        }            
+        u = new URL("jar:file:" + jdbc_path + "!/");
+        
+
+        try {
+            {
+                URLClassLoader ucl = new URLClassLoader(new URL[]{u});
+                Driver d = (Driver) Class.forName(classname, true, ucl).newInstance();
+                DriverManager.registerDriver(new DriverShim(d));
+                String portv = ":" + port + "/";
+                url.append(host).append(portv).append(dbName);
+                System.out.println("URL: " + url.toString());
+                connection = DriverManager.getConnection(url.toString(), user, password);
+                statement = connection.createStatement();
+                ResultSet resultSet = statement.executeQuery(sql_statement);
+                if (resultSet.next()) {
+                    {
+                        result = resultSet.getString(1);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            {
+                System.out.println("E:SQL Error");
+                e.printStackTrace();
+                return "E:Error connecting to database";
+            }
+        } finally {
+            {
+                try {
+                    {
+                        if (statement != null) {
+                            {
+                                statement.close();
+                            }
+                        }
+                        if (connection != null) {
+                            {
+                                connection.close();
+                            }
+                        }
+                    }
+                } catch (SQLException e) {
+                    {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+        return result;
+    }
+'''
+
+read_creds = '''
+// Help method for database access - parse credentials
+public static Map<String, String> parseCredentials(String filePath) throws IOException {
+        List<String> lines = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            System.out.println("path=" + filePath);
+            while ((line = reader.readLine()) != null) {
+                //System.out.println("line=" + line);
+                if (!line.substring(0, 1).equals("#")) {
+                    lines.add(line.trim());
+                }
+            }
+
+        }
+        StringBuilder contentBuilder = new StringBuilder();
+        for (String line : lines) {
+            contentBuilder.append(line);
+        }
+        String content = contentBuilder.toString();
+        Map<String, String> params = new HashMap<>();
+        String[] pairs = content.split(", ");
+        for (String pair : pairs) {
+            String[] keyValue = pair.split("=");
+            String key = keyValue[0].trim();
+            String value = keyValue[1].trim().replaceAll("[\']", "");
+            params.put(key, value);
+        }
+        String host = params.get("host");
+        String user = params.get("user");
+        String password = params.get("password");
+        String dbName = params.get("database");
+        return params;
+    }
+       '''
+       
+global_strings = '''
+                 String dbsys = ""; 
+                 String jdbc_path = ""; 
+                 String port = ""; 
+                 String host = ""; 
+                 String user = "";
+                 String password = "";
+                 String dbName = "";
+                 String filePath = "";
+                 String result = "";
+                 Map<String, String> credentials;
+                 Scanner scanner = new Scanner(System.in);
+                 String sql_statement = "";\n
+                 '''        
+
 # Ignored characters (spaces and tabs)
 t_ignore = ' \t'
 
 # Block comment
 def t_BLOCK_COMMENT(t):
     r'/\*([^*]|\*+[^*/])*\*+/'
+    #return t
     pass  # Block comments are ignored
 
 # Newline rule
@@ -261,9 +437,8 @@ def p_program(p):
     statements = "\n".join(p[3]) if p[3] else ""
     #statements = indent_block(statements, 2)
     
-    # The main function code, including the call to the procedure itself in the if __name__ block
-    p[0] = f"{p[1]}\n{declarations}\n{statements}\n}} //end main \n}}//end class {procedure_name}"
-    #p[0] = indent_block(p[0], level=0, is_function=True) 
+    # The main function code, including the call to the procedure itself in the if __name__ block 
+    p[0] = f"{p[1]}\n{declarations}\n{statements}\n}}{drivershim_class} \n//end main \n}} //end class {procedure_name}\n"     
     
     print('end program:\n', p[0], flush=True)    
 
@@ -271,8 +446,13 @@ def p_program(p):
 def p_procedure_header(p):
     '''procedure_header : ID COLON PROC OPTIONS LPAREN MAIN RPAREN SEMICOLON'''
     print('in procedure_header', f"p[:] values: {p[:]}", flush=True)
-    p[0] = "import java.io.FileNotFoundException;\nimport java.io.IOException;\n"
-    p[0] = p[0] + f"public class {p[1]} {{ \n public static void main(String[] args) throws FileNotFoundException, IOException {{"
+    p[0] = ""
+    p[0] = p[0] + java_imports + "\n"
+    p[0] = p[0] + f"public class {p[1]} {{ \n"       
+    p[0] = p[0] + sql_methods + "\n" + read_creds + "\n"
+    p[0] = p[0] + f"public static void main(String[] args) throws FileNotFoundException, IOException, MalformedURLException, ClassNotFoundException, InstantiationException, IllegalAccessException {{"
+    p[0] = p[0] + global_strings + "\n";
+    
     print('in procedure_header result:', f"p[:] values: {p[:]}", flush=True)
     
 def p_variable_access(p):
@@ -307,15 +487,22 @@ def p_variable_access(p):
     else:
         p[0] = p[1]
     print('end variable_access:', p[0], flush=True)      
-    
+ 
+all_dcls = ""    
+ 
 def p_declaration_list(p):
     '''declaration_list : declaration_list declaration SEMICOLON
                         | declaration SEMICOLON'''
     print('in declaration_list:', f"p[:] values: {p[:]}", flush=True)
+    global all_dcls
     if len(p) == 4:
         p[0] = p[1] + [p[2]]
     else:
         p[0] = [p[1]]
+       
+    all_dcls = ', '.join(p[0])
+    print('all_dcls:', all_dcls, flush=True) 
+        
     print('end declaration_list:', p[0], flush=True)    
 
    
@@ -323,16 +510,35 @@ def p_declaration(p):
     '''declaration : DCL id_list type_declaration
                    | DCL id_list array_spec type_declaration'''
     print('in declaration:', f"p[:] values: {p[:]}", flush=True)
+    
+    print('p1:', p[1], flush=True)
+    print('p2:', p[2], flush=True)
+    print('p3:', p[3], flush=True)
+         
+    if len(p) == 4:
+       type_str = p[3]
+    else:  
+       type_str = p[4]   
+       print('p4:', p[4], flush=True)
+       
+    match = re.search(r'\((.*?)\)', type_str)
+    if match:
+        lng = int(match.group(1))
+    else:
+        lng = 0
+    print('lng:', lng, flush=True)    
+    if lng <= 15:
+        inttyp = "int"
+    else:    
+        inttyp = "long"
+    print('type_str,len:', type_str, len, flush=True)
     decls = []
     if len(p) == 4:  # Scalar declaration
         typ = p[3].upper()     
         print('typ:', typ, flush=True)
         for var in p[2]:
-            if "FIXED BIN" in typ:
-                if "(17)" in typ:
-                    decls.append(f"int {var} = 0;")
-                else:
-                    decls.append(f"long {var} = 0;")
+            if "FIXED BIN" in typ:               
+               decls.append(f"{inttyp} {var} = 0;")              
             elif "CHAR" in typ:
                 decls.append(f'String {var} = " ";')  # Initialize CHAR variables as empty strings
     elif len(p) == 5:  # Array declaration
@@ -348,11 +554,11 @@ def p_declaration(p):
             # int[] myIntArray = new int[3];
             if "FIXED BIN" in typ:
                 if len(array_dims) == 1:
-                    decls.append(f"int[]  {var} = new int[{array_dims[0] + 2}];")
+                    decls.append(f"{inttyp}[]  {var} = new {inttyp}[{array_dims[0] + 2}];")
                     # Initialize the first element of the array
                     decls.append(f"{var}[0] = 0; //pseudo-init")
                 elif len(array_dims) == 2:
-                    decls.append(f"int[][]  {var} = new int[{array_dims[0] + 2}][{array_dims[1] + 2}];")                    
+                    decls.append(f"{inttyp}[][]  {var} = new {inttyp}[{array_dims[0] + 2}][{array_dims[1] + 2}];")                    
                     # Initialize the first element of the 2D array
                     decls.append(f"{var}[0][0] = 0; //pseudo-init")
             elif "CHAR" in typ:
@@ -366,6 +572,7 @@ def p_declaration(p):
                     decls.append(f'{var}[0][0] = ""; //pseudo-init')
                     
     p[0] = "\n".join(decls)
+    
     print('end declaration:', p[0], flush=True)
 
 def p_id_list(p):
@@ -396,18 +603,11 @@ def p_type_declaration(p):
                         | CHAR LPAREN NUMBER RPAREN'''
     print('in type_declaration:', f"p[:] values: {p[:]}", flush=True)                    
     if len(p) == 6:  # FIXED BIN(n)
-        p[0] = f"{p[1]} {p[2]}({p[4] + 2})" #additional dummy first entry!
+        #p[0] = f"{p[1]} {p[2]}({p[4] + 2})" #additional dummy first entry!
+        p[0] = f"{p[1]} {p[2]}({p[4]})"
     elif p[1].lower() == 'char':  # CHAR(n)
         p[0] = f"{p[1]}({p[3]})"
 
-
-# def p_id_list(p):
-#     '''id_list : ID
-#                | id_list ',' ID'''
-#     if len(p) == 2:
-#         p[0] = [p[1]]
-#     else:
-#         p[0] = p[1] + [p[3]]
 
 def p_statement_list(p):
     '''statement_list : statement_list statement  
@@ -520,11 +720,10 @@ def p_expression_decimal(p):
     '''expression : DECIMAL LPAREN ID RPAREN''' 
     print('in decimal:', f"p[:] values: {p[:]}", flush=True)              
     
-    # Convert the ID to a string using Python's str() function
-    p[0] = f"str({p[3]})"
+    # Convert the ID to a string using Java's String.valueOf() function
+    p[0] = f"String.valueOf({p[3]})"
     
     print('end decimal:', p[0], flush=True)
- 
         
 def p_if_statement(p):
     '''if_statement : IF relational_expression THEN statement ELSE statement   
@@ -585,25 +784,72 @@ def p_put_statement(p):
 
     p[0] = f"System.out.println({elements});"
     
+# def p_get_list_statement(p):
+#     '''get_list_statement : GET LIST LPAREN id_list RPAREN SEMICOLON'''
+#     print('in get_list:', f"p[:] values: {p[:]}", flush=True)
+#     vars_to_get = p[4]  # List of variable names
+    
+#     # Generate input statements with dynamic type checking
+#     python_input_statements = []
+#     for var in vars_to_get:
+#         python_input_statements.append(f'''
+                                       
+# try:
+#     {var}_input = input("Enter {var}: ")
+#     {var} = int({var}_input)
+# except ValueError:
+#     {var} = {var}_input  # Fall back to string if not an integer
+# ''')
+    
+#     # Join statements to form the complete block of code
+#     p[0] = '\n'.join(python_input_statements)
+#     print('end get_list:', p[0], flush=True)
+    
 def p_get_list_statement(p):
     '''get_list_statement : GET LIST LPAREN id_list RPAREN SEMICOLON'''
-    print('in get_list:', f"p[:] values: {p[:]}", flush=True)
-    vars_to_get = p[4]  # List of variable names
-    
-    # Generate input statements with dynamic type checking
-    python_input_statements = []
-    for var in vars_to_get:
-        python_input_statements.append(f'''
-try:
-    {var}_input = input("Enter {var}: ")
-    {var} = int({var}_input)
-except ValueError:
-    {var} = {var}_input  # Fall back to string if not an integer
-''')
-    
-    # Join statements to form the complete block of code
-    p[0] = '\n'.join(python_input_statements)
-    print('end get_list:', p[0], flush=True)
+    var_names = p[4]  # List of variable names (assumed to be a list of strings)
+
+    # Improved Java code generation with type handling and error checking
+    java_code = ""
+    for var_name in var_names:
+        print('var_name:', var_name, flush=True)
+        # Assuming you have a way to determine the type of var_name
+        var_type = get_variable_type(var_name, all_dcls)  # Pass the variable name and all declarations
+
+        java_code += f"System.out.print(\"Enter {var_name}: \");\n"
+        
+        print('var_type:', var_type, flush=True)
+
+        # Use appropriate input methods based on variable type
+        if var_type == "int":
+            java_code += f"{var_name} = scanner.nextInt();\nscanner.nextLine();\n"
+        elif var_type == "float":
+            java_code += f"{var_name} = scanner.nextDouble();\n"
+        elif var_type == "String":
+            java_code += f"{var_name} = scanner.nextLine();\n"
+        else:
+            # Handle unknown types gracefully
+            print(f"Warning: Unknown type '{var_type}' for variable '{var_name}'. Assuming String.")
+            java_code += f"{var_name} = scanner.nextLine();\n"
+
+    p[0] = java_code
+  
+
+import re
+
+def get_variable_type(variable_name, declarations):
+    print('declarations:', declarations, flush=True)
+    print('variable_name:', variable_name, flush=True)
+    # Regular expression to match variable declarations
+    pattern = r"(int|String|long)\s+(\w+)\s*="
+    # Find all matches in the declarations
+    matches = re.findall(pattern, declarations)
+    # Create a dictionary to store variable types
+    variable_types = {name: vtype for vtype, name in matches}
+    print('variable_types:', variable_types, flush=True)
+    # Return the type of the requested variable
+    return variable_types.get(variable_name, "Variable not found")
+
 
     
 # List of variable names (e.g., var1, var2, var3)
@@ -612,10 +858,6 @@ def p_id_list_multiple(p):
     print('in ID_list:', f"p[:] values: {p[:]}", flush=True) 
     p[0] = [p[1]] + p[3]  # Combine current ID with rest of the list
 
-# def p_id_list_single(p):
-#     '''id_list : ID'''
-#     p[0] = [p[1]]  # Single ID
-   
 
 def p_element_list(p):
     '''element_list : element
@@ -787,10 +1029,8 @@ def p_close_file(p):
     fname = p[4].replace('"', "")
     p[0] = f"br_{fname}.close();\n"  
            
-    
-import mysql.connector
-import os
 
+#Some global variables for database access    
 host = '' 
 user = ''
 password = '' 
@@ -805,83 +1045,56 @@ def read_parameters_from_file(filename):
         print(f"***Error: File '{filename}' not found. SQL error!")
         return None
 
+#SQL code here:
+    
+
 def p_sql_statement(p):
     'sql_statement : EXEC SQL STRING INTO ID SEMICOLON'
-    print('in sql_statement:', f"p[:] values: {p[:]}", flush=True)
-
-    # Load the SQL query and the target Java variable
+    # print('in sql_statement:', f"p[:] values: {p[:]}", flush=True)
+        
     sql_query = p[3].strip('"')
     pl1_var = p[5]
-    
-    # Generate Java code for SQL execution with JDBC
+    var_type = get_variable_type(pl1_var, all_dcls) 
+    # print('var_type:', pl1_var, var_type, flush=True)
+    add_to_result = "" 
+    if var_type == "int":
+       add_to_result = "Integer.parseInt(result);\n" 
+    else:
+        if var_type == "long": 
+            add_to_result = " Long.parseLong(result);\n" 
+        else:  
+            add_to_result = "result;\n" # only int, long, String types are supported
+       
+    # Read SQL credentials from a text file
     p[0] = f'''
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-
-public class DatabaseQuery {{
-    private static String host = "localhost";
-    private static String user = "root";
-    private static String password = "admin";
-    private static String dbName = "sakila";
-
-    public static String executeQuery() {{
-        Connection connection = null;
-        Statement statement = null;
-        String result = "";
-
-        try {{
-            // Load MySQL JDBC driver
-            connection = DriverManager.getConnection(
-                "jdbc:mysql://" + host + "/" + dbName, user, password
-            );
-            statement = connection.createStatement();
-
-            // Execute SQL query
-            String sqlQuery = "{sql_query}";
-            System.out.println("*** Executing SQL Query: " + sqlQuery);
-            ResultSet resultSet = statement.executeQuery(sqlQuery);
-
-            // Fetch result and store in the Java variable
-            if (resultSet.next()) {{
-                result = resultSet.getString(1);  // assuming the first column is the target
-            }}
-
-            System.out.println("*** SQL Result: " + result);
-
-        }} catch (SQLException e) {{
-            e.printStackTrace();
-        }} finally {{
-            try {{
-                if (statement != null) statement.close();
-                if (connection != null) connection.close();
-            }} catch (SQLException e) {{
-                e.printStackTrace();
-            }}
-        }}
-
-        return result;
-    }}
-
-    public static void main(String[] args) {{
-        // Example of capturing and displaying the result for PL/I variable "x"
-        String {pl1_var} = executeQuery();
-        System.out.println("Final result stored in: {pl1_var}");
-    }}
-}}
-'''
-
+        filePath = "c:/temp/creds.txt"; // Path to the credentials file
+        sql_statement =  "{sql_query}"; // SQL statement to be executed       
+        credentials = parseCredentials(filePath);
+        dbsys = credentials.get("dbsys");
+        jdbc_path = credentials.get("jdbc_path");
+        port = credentials.get("port");
+        host = credentials.get("host");
+        user = credentials.get("user");
+        password = credentials.get("password");
+        dbName = credentials.get("database");
+                
+        dbsys = dbsys.replace('"', ' ').trim();
+        jdbc_path = jdbc_path.replace('"', ' ').trim();
+        port = port.replace('"', ' ').trim();
+        host = host.replace('"', ' ').trim();
+        user = user.replace('"', ' ').trim();
+        password = password.replace('"', ' ').trim(); 
+        dbName = dbName.replace('"', ' ').trim();
+        result = executeQuery(dbsys, jdbc_path, port, sql_statement, host, dbName, user, password);        
+        //System.out.println("PL1var:" + {pl1_var} + ":" + "{var_type}");        
+        {pl1_var} = {add_to_result};             
+                     '''
+#{pl1_var}  = ((Number) result1).longValue();               
 def p_pl1_var(p):
     '''pl1_var : ID'''
     print('in pl1_var:', f"p[:] values: {p[:]}", flush=True)
     p[0] = p[1]  # PL/I variable is an identifier (ID)
 
-def p_sql_query(p):
-    '''sql_query : STRING'''
-    print('in sql_query:', f"p[:] values: {p[:]}", flush=True)
-    p[0] = p[1]  # The SQL query is a string
 
 # Error handling
 def p_error(p):
@@ -983,48 +1196,87 @@ def execute_transpiler():
 pl1_code = execute_transpiler() 
 
 # =============================================================================
-# Call the (yacc) parser
+# Call the (yacc) parser with or without trace
 # =============================================================================
 result = parser.parse(pl1_code)
 #result = parser.parse(pl1_code, debug=True)
 
-import subprocess
  
 def execute_transpiler(java_code, class_name):
+    import os 
+    import subprocess
+    import time
+    from pathlib import Path
+    
     # Step 0: Set JAVA_HOME to the path of your compatible JDK
+    # HARDCODED, please change this later!
     os.environ["JAVA_HOME"] = "C:\\Program Files\\Microsoft\\jdk-21.0.1.12-hotspot"   
    
     process = subprocess.run(["where", "java"], capture_output=True, text=True)
     print("Where is Java:" + process.stdout)
     
     # Step 1: Write Java code to a file named after the class
-    java_filename = f"{class_name}.java"    
-    #print('java_filename:', java_filename, flush=True)
+    java_filename = f"{class_name}.java"     
+    print('java_filename:', java_filename, flush=True)
     with open(java_filename, "w") as file:
         file.write(java_code)
         
     print("===Formatted JAVA code:==========================")
     subprocess.run(["astyle.exe", java_filename])
 
-    with open(java_filename, "r", encoding="utf-8") as file:
+    with open(java_filename, "r", encoding="utf-8") as file:    
        for line in file:
           print(line, end="")  # Print the line and suppress newline
-      
-    
+     
     # Step 2: Compile the Java code
-    compile_process = subprocess.run(["javac", java_filename], capture_output=True, text=True)
+    # get the current working directory
+    current_working_directory = Path.cwd()
+    # print output to the console
+    #print('***workdir:', current_working_directory, flush=True)
+   
+    # Insert the directory path in here
+    path = current_working_directory
+     
+    # Extracting all the contents in the directory corresponding to path
+    l_files = os.listdir(path)     
+    # Iterating over all the files
+    for file in l_files:             
+        file_path = f'{path}\\{file}'
+        #print(file)     
+    #print(f'Current working directory: {path}')    
+    file_with_path = os.path.join(path, java_filename)
+    #print('***fullname:', file_with_path, flush=True)
+    
+    compile_process = subprocess.run(["javac  " , file_with_path], capture_output=True, text=True)
     if compile_process.returncode != 0:
         print("Compilation failed:", compile_process.stderr)
         return
+    print('*** after_java_filename:', java_filename, flush=True)
 
-    # Step 3: Execute the Java class
-    #run_process = subprocess.run(["java", class_name], capture_output=True, text=True)
-    run_process = subprocess.run(["C:\\Program Files\\Microsoft\\jdk-21.0.1.12-hotspot\\bin\\java", class_name], capture_output=True, text=True)
+    # Step 3: Execute the Java class   
+    # Path is HARDCODED, please change this later!
+       
+    run_process = subprocess.run(
+    [
+        "C:\\Program Files\\Microsoft\\jdk-21.0.1.12-hotspot\\bin\\java",       
+        class_name
+    ],
+    capture_output=True,
+    text=True
+    )
+    
+    print('*** classname:', class_name, flush=True)
+                      
     if run_process.returncode != 0:
         print("\nExecution failed:", run_process.stderr)
     else:
         print("\n")
         print("\n===Execution result:==========================\n", run_process.stdout)
+     
+    
+    #print("Output:", run_process.stdout)
+    #print("Error:", run_process.stderr)
+    
     print("\n")
 
     # Optional: Clean up the generated files
@@ -1033,6 +1285,7 @@ def execute_transpiler(java_code, class_name):
     # if os.path.exists(class_file):
     #     os.remove(class_file)
 
+# If you need all tokens...
 # print("Tokens:") 
 # print_tokens(pl1_code)
 
@@ -1044,8 +1297,8 @@ enablePrint()
 if result:
     print("===PL/I input:================================")
     print(pl1_code)
-    print("===Java version:============================")
-    print(result)
+    #print("===Java version:============================")
+    #print(result)
     print("===Execution outputs:==========================")
     print('procedure_name:', procedure_name, flush=True)
     execute_transpiler(result, procedure_name)    
