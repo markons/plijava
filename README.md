@@ -9,6 +9,7 @@ It contains errors which I am trying to correct. It is not complete, but will be
 ### Components needed
 - Python 3.x  
 - mySql Java JDBC driver (for the in V1.01 installed MySql interface)
+  or IBM's JDBC driver (for the Db2 Community Edition). 
 - "astyle" open source Java formatter for a beautified Java output
 ### How to run
 - Tested only under Windows 11
