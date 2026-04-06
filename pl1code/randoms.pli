@@ -1,0 +1,15 @@
+randoms: proc options(main);
+  dcl ergebnis    fixed bin(31);
+  dcl kern        fixed bin(31);
+  dcl j           fixed bin(31);
+	kern = 100;
+	do j = 1 to 10;
+	  call randomx(kern, ergebnis);
+	  put skip list(ergebnis);
+	end;  	
+randomx: proc(a,b);
+    dcl i    fixed bin(15);
+	i = random(100);	
+	b = i;
+end;
+end randoms;

@@ -1,0 +1,7 @@
+test12: proc options(main);
+    dcl x fixed bin(15);
+    dcl r fixed bin(15);
+    x = 17;
+    r = mod(x, 5);
+    put skip list('17 mod 5 =', r);
+end test12;

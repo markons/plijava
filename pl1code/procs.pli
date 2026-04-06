@@ -1,0 +1,23 @@
+procs: PROC OPTIONS(MAIN);
+/* test internal procedure, put skip  */
+    dcl x     fixed bin(15);
+	dcl y     fixed bin(15);
+	
+    put skip list('***running struct***');
+	x = 1;
+	call intprc(x);
+	put skip list('x+=',x);
+	
+	call intprc(5);
+			
+	intprc: proc(a);  	  
+	  dcl c    fixed bin(15);
+	  put skip list('a=',a);
+	  c = a + 1;
+	  put skip list('a+1=',c);
+	  a = 7;
+	end; 
+	
+	call intprc(999);
+	  
+end procs;

@@ -1,0 +1,11 @@
+test19: proc options(main);
+    dcl x fixed bin(15);
+    x = 10;
+    if x > 5 then
+        do;
+            put skip list('x > 5');
+            put skip list('x =', x);
+        end;
+    else
+        put skip list('x <= 5');
+end test19;

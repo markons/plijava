@@ -1,41 +1,163 @@
 """
-Created on Tue Nov  5 17:15:13 2024
+================================================================================
+ plijava.py  -  PL/I to Java Transpiler                              v1.03
+================================================================================
+ A fork of the plithon PL/I-to-Python transpiler, retargeted to Java.
+ Uses PLY (Python Lex-Yacc) for lexical analysis and LALR(1) parsing.
 
-@author: maga1
-"""  
+ Author  : maga1
+ Created : 2024-11-05
+ Updated : 2025-04-06
+ Platform: Python 3.x + PLY + JDK (tested with Semeru JDK 26)
+ IDE     : Python Spyder (debug prints active; set blockPrint() to suppress)
 
-# Version 1.02
-# =============================================================================
-# A fork of the plithon PL/I to Python transpiler to generate Java code
-# =============================================================================
-# This version supports following PL/I constructs:
-#    
-# programname: proc options(main);
-#   supported_statements...
-# end programname;  
-#
-# Supported statements:
-#   1  dcl variable_name <fixed bin(15|31) | char(length)>;
-#   2  variable = <arithmetic-expression> | <string-expression>;
-#   3  operators in arithmetic_expression: + - * / ( )
-#   4  operators in string-expression: builtins: substr index decimal
-#   5  if relational-expression then statement else statement;
-#   6  select(expression) when(value) statement; other statement; end; 
-#   7  put skip list(variable | constant);
-#   8  exec sql "select  sql-select-field" into variable; only mySql, Db2 LUW are supported 
-#   9  still dont work: get list(variable-list); - read variables from console per prompt
-#  10  two-dimensional arrays are now supported (only integer indexing is possible)
-#  11  record i/o simple version (open close read write) works
-# ============================================================================= 
-# =============================================================================
-# Development environment is the Python Spyder IDE
-# ============================================================================= 
+--------------------------------------------------------------------------------
+ USAGE
+--------------------------------------------------------------------------------
+ 1. Run the script.
+ 2. Select a .pli file in the file dialog that opens.
+ 3. The transpiler parses the PL/I source and generates a Java source file
+    named after the PL/I main procedure (e.g. testret.java).
+ 4. The Java file is compiled with javac and executed automatically.
+ 5. Output is printed to the console.
+
+ Configuration (hardcoded — update for your environment):
+   JAVA_HOME : C:\\Program Files\\Semeru\\jdk-26.0.0.35-openj9
+   SQL creds : c:/temp/creds.txt  (keys: dbsys, jdbc_path, port, host,
+                                         user, password, database)
+
+--------------------------------------------------------------------------------
+ DEPENDENCIES
+--------------------------------------------------------------------------------
+   pip install ply python-docx
+   JDK in JAVA_HOME (javac + java must be reachable)
+   astyle.exe (optional — pretty-prints generated Java; skipped if absent)
+
+--------------------------------------------------------------------------------
+ SUPPORTED PL/I CONSTRUCTS
+--------------------------------------------------------------------------------
+  Program structure
+    programname: proc options(main);
+      ...statements...
+    end programname;
+
+  Declarations
+    dcl var fixed bin(15|31);          scalar integer (int / long)
+    dcl var char(n);                   scalar string
+    dcl var(n) fixed bin(15|31);       1-D integer array
+    dcl var(n,m) fixed bin(15|31);     2-D integer array
+    dcl var(n) char(len);              1-D string array
+    dcl 1 recname, 2 field type, ...;  record (generates inner class)
+
+  Statements
+    var = expression;                  assignment
+    if cond then stmt else stmt;       conditional (with do;...end; blocks)
+    select(expr); when(v) stmt; other stmt; end;   case/switch
+    do while(cond); ...stmts... end;   while loop
+    do var = start to end; ...end;     counted for loop
+    put skip list(expr, ...);          console output  -> System.out.println
+    get list(var, ...);                console input   -> scanner.nextInt/Line
+    call subname(args);                subroutine call
+    return(expr);                      function return
+
+  Internal procedures
+    name: proc(params) returns(type);  typed function
+    name: proc(params);                void procedure
+    name: proc() returns(type);        no-arg function
+    name: proc();                      no-arg void procedure
+    Parameter types are inferred from the dcl statements inside the proc.
+
+  Built-in functions
+    substr(var, start, len)            -> String.substring()
+    index(var, 'char')                 -> String.indexOf() + 1
+    decimal(var)                       -> String.valueOf()
+    mod(var, n)                        -> var % n
+    random() / random(n)               -> RndRuntime.random()
+    expr || expr                       string concatenation -> Java +
+
+  File I/O
+    open file('name') input;           -> BufferedReader
+    open file('name') output;          -> PrintWriter
+    read file('name') into(var);       -> readLine()
+    write file('name') from(var);      -> println()
+    close file('name');                -> close()
+
+  Database (exec sql)
+    exec sql "SELECT col FROM tbl" into var;
+    Supported: MySQL, Db2 LUW.  Credentials read from c:/temp/creds.txt.
+    Result always fetched as first column of first row (String/int/long).
+
+  Java helpers generated automatically
+    DriverShim   — JDBC driver loader via URLClassLoader
+    RndRuntime   — wrapper for java.util.Random
+
+--------------------------------------------------------------------------------
+ KNOWN BUGS / FAILING FEATURES
+--------------------------------------------------------------------------------
+  [PARSER]
+  - declaration_list grammar is both left- and right-recursive, causing
+    LALR(1) reduce/reduce conflicts. Declarations inside internal
+    procedures may be mis-parsed in edge cases.
+  - expression rule contains a bare '| ID' alternative that duplicates
+    variable_access, leading to reduce/reduce conflicts.
+  - t_FILENAME defined but FILENAME not in tokens tuple -> PLY LexError
+    at startup.  (t_FILENAME is dead code; should be removed.)
+  - VARYING in reserved dict but not in tokens tuple -> token error if
+    'varying' appears in source.
+  - EQUALS token (r'=') duplicates ASSIGN (r'='); EQUALS is unreachable.
+
+  [CODE GENERATION]
+  - SUBSTR with single argument generates .substring(n:) — Python slice
+    syntax, not valid Java.  Fix: use .substring(n).
+  - exec sql assignment generates a double semicolon:
+      var = Integer.parseInt(result);;
+  - p_block_comment_statement uses p[0] instead of p[1]; block comment
+    text is lost in output.
+  - put skip list() elements are joined with '+' only — no spaces added
+    between numeric/string values in the output.
+  - SQL result: only the first column of the first row is returned.
+    Multi-column / multi-row queries are not supported.
+
+  [LIMITATIONS]
+  - Only integer array indexing supported (no expression indices).
+  - do-from-to loop: no BY clause (step always 1).
+  - No PL/I ON conditions (error / endfile handling).
+  - No PICTURE variables.
+  - No BASED or POINTER variables.
+  - No ENTRY declarations.
+  - get list() type detection relies on previously seen dcl output;
+    may fail if dcl appears after get in the source.
+
+--------------------------------------------------------------------------------
+ VERSION HISTORY
+--------------------------------------------------------------------------------
+  v1.03  2025-04-06  Internal procedures, DO FROM/TO, RANDOM, record dcl,
+                     array/function-call disambiguation, RndRuntime class,
+                     javac path fix, JDK path updated to Semeru JDK 26,
+                     astyle call made optional.
+  v1.02  2024-xx-xx  GitHub baseline (markons/plijava).
+  v1.01  2024-11-05  Initial fork from plithon.
+================================================================================
+"""
 
 # Now you can set up your PLY parser
 import ply.lex as lex
 import ply.yacc as yacc
 import sys, os
 from datetime import datetime
+
+# Directory that contains the pre-compiled plijava runtime helpers:
+#   DriverShim.class, RndRuntime.class, PliJavaRuntime.class
+# Adjust this path if you move the javalib folder.
+JAVALIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__))
+                           if '__file__' in globals() else os.getcwd(),
+                           'javalib')
+import logging
+
+# Configure logging. Set debug when PLIJAVA_DEBUG=1
+log_level = logging.DEBUG if os.environ.get("PLIJAVA_DEBUG") in ("1", "true", "True") else logging.INFO
+logging.basicConfig(level=log_level, format='%(asctime)s %(levelname)s:%(name)s: %(message)s')
+logger = logging.getLogger("plijava")
 
 level=1 #irrelevant, must be deleted
 
@@ -45,19 +167,21 @@ procedure_name = ""
 dt = datetime.now()
 # getting the timestamp
 ts = datetime.timestamp(dt)
-print('start at:', dt)
+logger.info('start at: %s', dt)
 
 # List of token names
 tokens = (
     'ID', 'INDEXED_ID', 'NUMBER', 'CHAR_CONST', 'ASSIGN',
     'PLUS', 'MINUS', 'TIMES', 'DIVIDE',
     'LPAREN', 'RPAREN', 'LT', 'GT', 'LE', 'GE', 'EQ', 'NE',
-    'COLON', 'SEMICOLON', 'COMMA',  
+    'COLON', 'SEMICOLON', 'COMMA',
     'PUT', 'SKIP', 'LIST', 'END', 'WHEN', 'OTHER', 'SELECT', 'DO', 'WHILE',
-    'PROC', 'OPTIONS', 'MAIN', 'DCL', 'FIXED', 'BIN', 'CHAR',  
+    'PROC', 'OPTIONS', 'MAIN', 'DCL', 'FIXED', 'BIN', 'CHAR',
     'IF', 'THEN', 'ELSE', 'BLOCK_COMMENT', 'SUBSTR', 'CONCAT','DECIMAL','MOD',
     'EXEC', 'SQL', 'INTO', 'STRING', 'INDEX', 'GET',
-    'OPEN','CLOSE','READ','WRITE','FILE','FROM','MODE','INPUT','OUTPUT'
+    'OPEN','CLOSE','READ','WRITE','FILE','FROM','MODE','INPUT','OUTPUT',
+    'LEVEL_1','LEVEL_2', 'RECORD_BEGIN','RECORD_END','CALL', 'RANDOM', 'TO',
+    'EQUALS', 'RETURNS', 'RETURN'
 )
 
 # Regular expression rules for tokens
@@ -80,7 +204,9 @@ t_COMMA = r','
 t_CONCAT = r'\|\|'
 t_EXEC = r'EXEC'
 t_SQL = r'SQL'
-t_INTO = r'INTO'
+t_INTO = r'INTO' 
+t_RANDOM = r'random'
+t_EQUALS = r'='
  
 
 # Reserved keywords
@@ -120,7 +246,12 @@ reserved = {
     'input': 'INPUT',
     'output': 'OUTPUT',
     'from': 'FROM',
-    'decimal': 'DECIMAL',
+    'decimal': 'DECIMAL',  
+    'call': 'CALL',
+    'random': 'RANDOM',
+    'to': 'TO',
+    'returns': 'RETURNS',
+    'return': 'RETURN',
 }
 
 # Disable print  
@@ -132,7 +263,7 @@ def enablePrint():
     sys.stdout = sys.__stdout__
 
 # Disable print for production version
-blockPrint()
+#blockPrint()
 
 #  Identifiers (variables)
 def t_ID(t):
@@ -161,9 +292,11 @@ def t_CHAR_CONST(t):
 # file name (strings in single quotes)
 def t_FILENAME(t):
     r"\'([^\\\n]|(\\.))*?\'"
-    print('in filename:', t, flush=True)    
-    print('in filename:', t, flush=True)
+    logger.debug('in filename: %s', t)
+    logger.debug('in filename: %s', t)
     return t
+
+
 
 
 
@@ -181,189 +314,40 @@ java_imports = ('import java.io.FileNotFoundException;\n' +
                  'import java.net.MalformedURLException;\n' +
                  'import java.net.URL;\n' + 
                  'import java.util.Scanner;\n' +
-                 'import java.net.URLClassLoader;'
+                 'import java.net.URLClassLoader;\n' +
+                 'import java.util.Random;'
                  )
 
-drivershim_class = '''
-// Help class for database access
-static class DriverShim implements Driver {
-	private Driver driver;
-	DriverShim(Driver d) {
-		this.driver = d;
-	}
-	public boolean acceptsURL(String u) throws SQLException {
-		return this.driver.acceptsURL(u);
-	}
-	public Connection connect(String u, Properties p) throws SQLException {
-		return this.driver.connect(u, p);
-	}
-	public int getMajorVersion() {
-		return this.driver.getMajorVersion();
-	}
-	public int getMinorVersion() {
-		return this.driver.getMinorVersion();
-	}
-	public DriverPropertyInfo[] getPropertyInfo(String u, Properties p) throws SQLException {
-		return this.driver.getPropertyInfo(u, p);
-	}
-	public boolean jdbcCompliant() {
-		return this.driver.jdbcCompliant();
-	}
+# RndRuntime and DriverShim are now in javalib/RndRuntime.java and
+# javalib/DriverShim.java — compiled once, referenced via classpath.
+# These variables are kept as empty strings so existing code that
+# references them does not break.
+random_class     = ''
+drivershim_class = ''
 
-    @Override
-    public Logger getParentLogger() throws SQLFeatureNotSupportedException {
-        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
-    }
-}
-'''
-
-sql_methods = '''
-// Needed for database access
-public static String executeQuery(
-            String dbsys,  
-            String jdbc_path,  
-            String port,
-            String sql_statement,
-            String host,
-            String dbName,
-            String user,
-            String password)
-            throws
-            MalformedURLException,
-            ClassNotFoundException,
-            InstantiationException,
-            IllegalAccessException {
-        Connection connection = null;
-        Statement statement = null;
-        String result = "";         
-        String classname;
-        URL u;
-        StringBuilder url;
-
-        System.out.println("=========== database call parameters ========="); 
-        System.out.println("dbsys:" + dbsys);
-        System.out.println("jdbc_path:" + jdbc_path);
-        System.out.println("port:" + port);
-        System.out.println("host:" + host);
-        System.out.println("dbname:" + dbName);
-        System.out.println("user:" + user);
-        System.out.println("password:" + password);
-        System.out.println("=========== database call results ============"); 
-
-        
-        switch (dbsys) {
-            case "db2":                    
-                classname = "com.ibm.db2.jcc.DB2Driver";                    
-                url = new StringBuilder("jdbc:db2://");
-                break;
-            case "mysql":                
-                classname = "com.mysql.cj.jdbc.Driver";                    
-                url = new StringBuilder("jdbc:mysql://");
-                break;
-            default:
-                return "E:No database system (db2, mysql) selected";
-        }            
-        u = new URL("jar:file:" + jdbc_path + "!/");
-        
-
-        try {
-            {
-                URLClassLoader ucl = new URLClassLoader(new URL[]{u});
-                Driver d = (Driver) Class.forName(classname, true, ucl).newInstance();
-                DriverManager.registerDriver(new DriverShim(d));
-                String portv = ":" + port + "/";
-                url.append(host).append(portv).append(dbName);
-                System.out.println("URL: " + url.toString());
-                connection = DriverManager.getConnection(url.toString(), user, password);
-                statement = connection.createStatement();
-                ResultSet resultSet = statement.executeQuery(sql_statement);
-                if (resultSet.next()) {
-                    {
-                        result = resultSet.getString(1);
-                    }
-                }
-            }
-        } catch (SQLException e) {
-            {
-                System.out.println("E:SQL Error");
-                e.printStackTrace();
-                return "E:Error connecting to database";
-            }
-        } finally {
-            {
-                try {
-                    {
-                        if (statement != null) {
-                            {
-                                statement.close();
-                            }
-                        }
-                        if (connection != null) {
-                            {
-                                connection.close();
-                            }
-                        }
-                    }
-                } catch (SQLException e) {
-                    {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        }
-        return result;
-    }
-'''
-
-read_creds = '''
-// Help method for database access - parse credentials
-public static Map<String, String> parseCredentials(String filePath) throws IOException {
-        List<String> lines = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
-            String line;
-            System.out.println("path=" + filePath);
-            while ((line = reader.readLine()) != null) {
-                //System.out.println("line=" + line);
-                if (!line.substring(0, 1).equals("#")) {
-                    lines.add(line.trim());
-                }
-            }
-
-        }
-        StringBuilder contentBuilder = new StringBuilder();
-        for (String line : lines) {
-            contentBuilder.append(line);
-        }
-        String content = contentBuilder.toString();
-        Map<String, String> params = new HashMap<>();
-        String[] pairs = content.split(", ");
-        for (String pair : pairs) {
-            String[] keyValue = pair.split("=");
-            String key = keyValue[0].trim();
-            String value = keyValue[1].trim().replaceAll("[\']", "");
-            params.put(key, value);
-        }
-        String host = params.get("host");
-        String user = params.get("user");
-        String password = params.get("password");
-        String dbName = params.get("database");
-        return params;
-    }
-       '''
+# sql_methods and read_creds are now in javalib/PliJavaRuntime.java.
+# Generated Java calls PliJavaRuntime.executeQuery() and
+# PliJavaRuntime.parseCredentials() via classpath.
+sql_methods = ''
+read_creds  = ''
        
 global_strings = '''
-                 String dbsys = ""; 
-                 String jdbc_path = ""; 
-                 String port = ""; 
-                 String host = ""; 
-                 String user = "";
-                 String password = "";
-                 String dbName = "";
-                 String filePath = "";
-                 String result = "";
-                 Map<String, String> credentials;
-                 Scanner scanner = new Scanner(System.in);
-                 String sql_statement = "";\n
+                 // ---- standard variables (always generated) -------------------------
+                 // Database connection parameters (filled by PliJavaRuntime at runtime)
+                 String dbsys      = "";   // database system: "db2" or "mysql"
+                 String jdbc_path  = "";   // path to JDBC driver .jar
+                 String port       = "";   // database port
+                 String host       = "";   // database host name or IP
+                 String user       = "";   // database user
+                 String password   = "";   // database password
+                 String dbName     = "";   // database / schema name
+                 // General-purpose runtime variables
+                 String filePath   = "";   // path to credentials file (c:/temp/creds.txt)
+                 String result     = "";   // receives the SQL query result string
+                 Map<String, String> credentials;          // parsed credential map
+                 Scanner scanner = new Scanner(System.in); // console input (GET LIST)
+                 String sql_statement = "";                // current SQL statement
+                 // ---- end standard variables -----------------------------------------\n
                  '''        
 
 # Ignored characters (spaces and tabs)
@@ -382,8 +366,9 @@ def t_newline(t):
 
 # Error handling rule
 def t_error(t):
-    print(f"Illegal character '{t.value[0]}'")
+    logger.error("Illegal character '%s'", t.value[0])
     t.lexer.skip(1)
+    
     
 # Recognize string literals with single or double quotes
 #t_CHAR_CONST = r"\'([^\\']|\\.)*\'"   # Single-quoted strings
@@ -419,33 +404,69 @@ def print_tokens(input_text):
         token = lexer.token()
         if not token:
             break
-        print(token)
+        logger.debug('token: %s', token)
 
-    
 # PL/I program: progname:proc options(main);<declares> <execs> end progname;
 def p_program(p):
-    '''program : procedure_header declaration_list statement_list END ID SEMICOLON'''
-    print('in program:', f"p[:] values: {p[:]}", flush=True)
-    # Extract the procedure name from the ID token (which is the fifth element in p)
+    '''program : procedure_header declaration_list statement_list END ID SEMICOLON external_proc_list
+               | procedure_header declaration_list statement_list END ID SEMICOLON'''
+    logger.debug('in program: p values: %s', p[:])
+
     global procedure_name
     procedure_name = p[5]
-    
-    # Combine the procedure header, declarations, and the list of statements
-    # Declaration list and statement list are both lists, so they should be joined properly
+
+    # Process declarations
     declarations = "\n".join(p[2]) if p[2] else ""
     declarations = indent_block(declarations, 2)
-    statements = "\n".join(p[3]) if p[3] else ""
-    #statements = indent_block(statements, 2)
-    
-    # The main function code, including the call to the procedure itself in the if __name__ block 
-    p[0] = f"{p[1]}\n{declarations}\n{statements}\n}}{drivershim_class} \n//end main \n}} //end class {procedure_name}\n"     
-    
-    print('end program:\n', p[0], flush=True)    
 
+    # Separate internal procedures from main procedure statements
+    statements = []
+    internal_procs = []
+    for stmt in p[3]:
+        if stmt.startswith("public static "):  # Check for internal procedures (void, int, long, String)
+            internal_procs.append(stmt)
+        else:
+            statements.append(stmt)
+
+    statements = "\n".join(statements) if statements else ""
+    statements = indent_block(statements, 2)
+
+    # Collect external procedures (defined after END mainprog;)
+    external_procs = p[7] if len(p) == 8 else []
+
+    # Generate main procedure code
+    main_code = f"{p[1]}\n{declarations}\n{statements}\n}}"
+
+    # Add all procedures (internal + external) to the output
+    all_procs = internal_procs + (external_procs or [])
+    internal_code = "\n".join(all_procs)
+
+    # Final class structure
+    p[0] = (
+        f"{main_code}\n"
+        f"{internal_code}\n"
+        f"{drivershim_class}\n"
+        f"{random_class}\n"
+        f"}} //end class {procedure_name}\n"
+    )
+
+    logger.debug('end program:\n%s', p[0])
+
+
+def p_external_proc_list(p):
+    '''external_proc_list : external_proc_list proc_statement
+                          | proc_statement'''
+    logger.debug('in external_proc_list: p values: %s', p[:])
+    if len(p) == 3:
+        p[0] = p[1] + [p[2]]
+    else:
+        p[0] = [p[1]]
+
+    
 # Procedure header and its syntax
 def p_procedure_header(p):
     '''procedure_header : ID COLON PROC OPTIONS LPAREN MAIN RPAREN SEMICOLON'''
-    print('in procedure_header', f"p[:] values: {p[:]}", flush=True)
+    logger.debug('in procedure_header: p values: %s', p[:])
     p[0] = ""
     p[0] = p[0] + java_imports + "\n"
     p[0] = p[0] + f"public class {p[1]} {{ \n"       
@@ -453,134 +474,336 @@ def p_procedure_header(p):
     p[0] = p[0] + f"public static void main(String[] args) throws FileNotFoundException, IOException, MalformedURLException, ClassNotFoundException, InstantiationException, IllegalAccessException {{"
     p[0] = p[0] + global_strings + "\n";
     
-    print('in procedure_header result:', f"p[:] values: {p[:]}", flush=True)
+    logger.debug('end procedure_header result: p values: %s', p[:])    
     
+def p_proc_statement(p):
+    '''proc_statement : proc_header declaration_list statement_list END SEMICOLON
+                      | proc_header declaration_list statement_list END ID SEMICOLON'''
+    logger.debug('in proc_statement: p values: %s', p[:])
+
+    # p[1] is now a tuple (header_string, param_names_list)
+    header_str, param_names = p[1]
+
+    # Filter out declarations that redeclare parameters, and collect their types
+    param_types = {}
+    filtered_decls = []
+    if p[2]:
+        for decl in p[2]:
+            is_param_decl = False
+            for param in param_names:
+                for java_type in ("String", "long", "int"):
+                    if f"{java_type} {param} = " in decl:
+                        is_param_decl = True
+                        param_types[param] = java_type
+                        logger.debug("Filtering out parameter redeclaration (%s): %s", java_type, decl)
+                        break
+                if is_param_decl:
+                    break
+            if not is_param_decl:
+                filtered_decls.append(decl)
+
+    declarations = "\n".join(filtered_decls) if filtered_decls else ""
+    statements = "\n".join(p[3]) if p[3] else ""
+
+    is_void = "void" in header_str and bool(param_names)
+
+    if is_void:
+        # Pass-by-reference: parameters become type[] arrays; body uses local copies
+        ref_params = ", ".join(
+            f"{param_types.get(param, 'long')}[] _{param}" for param in param_names
+        )
+        import re
+        header_str = re.sub(r'\([^)]*\)', f'({ref_params})', header_str, count=1)
+        logger.debug("Rebuilt void header with ref params: %s", header_str)
+
+        # Local copies from ref arrays at procedure entry
+        local_copies = "\n".join(
+            f"{param_types.get(param, 'long')} {param} = _{param}[0];"
+            for param in param_names
+        )
+        # Copy-back to ref arrays at procedure exit
+        copy_back = "\n".join(
+            f"_{param}[0] = {param};"
+            for param in param_names
+        )
+        p[0] = f"{header_str}\n{local_copies}\n{declarations}\n{statements}\n{copy_back}\n}}\n"
+    else:
+        # Value-returning proc: rebuild header with correct param types from DCL
+        if param_names:
+            correct_params = ", ".join(
+                f"{param_types.get(param, 'int')} {param}" for param in param_names
+            )
+            import re
+            header_str = re.sub(r'\([^)]*\)', f'({correct_params})', header_str, count=1)
+            logger.debug("Rebuilt header with correct param types: %s", header_str)
+        p[0] = f"{header_str}\n{declarations}\n{statements}\n}}\n"
+
+def p_proc_header(p):
+    '''proc_header : ID COLON PROC LPAREN parameter_list RPAREN RETURNS LPAREN type_declaration RPAREN SEMICOLON
+                   | ID COLON PROC LPAREN RPAREN RETURNS LPAREN type_declaration RPAREN SEMICOLON
+                   | ID COLON PROC LPAREN parameter_list RPAREN SEMICOLON
+                   | ID COLON PROC LPAREN RPAREN SEMICOLON'''
+    logger.debug('in proc_header: p values: %s', p[:])
+
+    param_names = []  # List of parameter names
+
+    if len(p) == 12:  # With parameters and RETURNS
+        java_parameters = convert_to_java_parameters(p[5])
+        java_return_type = pli_type_to_java(p[9])
+        header_str = f"public static {java_return_type} {p[1]}({java_parameters}) {{"
+        # Extract parameter names from p[5]
+        param_names = [param.strip() for param in p[5].split(',')]
+    elif len(p) == 11:  # No parameters but with RETURNS
+        java_return_type = pli_type_to_java(p[8])
+        header_str = f"public static {java_return_type} {p[1]}() {{"
+    elif len(p) == 8:  # With parameters, no RETURNS
+        java_parameters = convert_to_java_parameters(p[5])
+        header_str = f"public static void {p[1]}({java_parameters}) {{"
+        # Extract parameter names from p[5]
+        param_names = [param.strip() for param in p[5].split(',')]
+    else:  # No parameters, no RETURNS
+        header_str = f"public static void {p[1]}() {{"
+
+    # Return tuple of (header_string, param_names_list)
+    p[0] = (header_str, param_names)
+    logger.debug("proc_header returning: %s", p[0])
+
+def pli_type_to_java(pli_type):
+    """Converts a PL/I type declaration to a Java type."""
+    logger.debug('in pli_type_to_java: %s', pli_type)
+    if pli_type is None:
+        return "int"
+    pli_type_upper = pli_type.upper()
+    if "CHAR" in pli_type_upper:
+        return "String"
+    elif "FIXED BIN" in pli_type_upper:
+        # Extract the precision from FIXED BIN(n)
+        import re
+        match = re.search(r'\((\d+)\)', pli_type)
+        if match:
+            precision = int(match.group(1))
+            if precision > 15:
+                return "long"
+        return "int"
+    return "int"  # Default to int
+        
+def convert_to_java_parameters(pl1_params):
+    """
+    Converts a PL/I parameter list into Java-style type declarations.
+    Example:
+    Input: "x, y"
+    Output: "int x, int y"
+    """
+    logger.debug('in convert_to_java_parameters: %s', pl1_params)
+    if not pl1_params:
+        return ""  # No parameters
+
+    # Assume all parameters are integers for simplicity; modify if needed
+    java_params = [f"int {param.strip()}" for param in pl1_params.split(',')]
+    return ", ".join(java_params)
+        
+   
+def p_parameter_list(p):
+    '''parameter_list : parameter_list COMMA expression
+                      | expression'''
+    logger.debug('in parameter_list: p values: %s', p[:])                                    
+    if len(p) == 4:  # Multiple parameters
+        p[0] = f"{p[1]}, {p[3]}"
+    else:  # Single parameter
+        p[0] = p[1]                
+        
+def p_parameter(p):
+    '''parameter : ID
+                 | ID type_declaration'''
+    logger.debug('in parameter: p values: %s', p[:])                
+    if len(p) == 2:
+        p[0] = f"int {p[1]}"  # Default to int
+    else:
+        p[0] = f"{p[2]} {p[1]}"
+        
+        
 def p_variable_access(p):
     """
     variable_access : ID LPAREN NUMBER COMMA NUMBER RPAREN
                    | ID LPAREN ID COMMA ID RPAREN
                    | ID LPAREN ID COMMA NUMBER RPAREN
-                   | ID LPAREN NUMBER RPAREN                   
+                   | ID LPAREN NUMBER RPAREN
                    | ID LPAREN ID RPAREN
-                   | ID                          
-    """   
-     
-    #| ID LPAREN NUMBER COMMA NUMBER RPAREN ASSIGN expression  
-    print('in variable_access', f"p[:] values: {p[:]}", flush=True) 
-    print('len(p)', len(p), flush=True) 
-    if len(p) == 7:  # Two-dimensional array access or assignment                
-        # Handle integer indices with adjustment
-        if isinstance(p[3], int) and isinstance(p[5], int):
-            print('case(1)', flush=True)             
+                   | ID
+    """
+
+    #| ID LPAREN NUMBER COMMA NUMBER RPAREN ASSIGN expression
+    logger.debug('in variable_access p values: %s', p[:])
+    logger.debug('len(p) %d', len(p))
+
+    # Check if this is an array access or a function call
+    is_array = p[1] in declared_arrays
+    logger.debug('is_array check: %s in declared_arrays = %s', p[1], is_array)
+
+    if len(p) == 7:  # Two-dimensional access
+        if is_array:
+            # Array access - use brackets
             p[0] = f"{p[1]}[{p[3]}][{p[5]}]"
-        # Check if ID with NUMBER pattern
-        elif isinstance(p[3], str) and isinstance(p[5], int):
-            print('case(1) - ID with NUMBER', flush=True)
-            p[0] = f"{p[1]}[{p[3]}][{p[5]}]"  # Handle variable and integer index    
         else:
-            # Handle variable indices (no adjustment)
-            print('case(2)', flush=True) 
-            # p[0] = f"{p[1]}[{p[3]}][{p[5]}] = {p[7]}"
-            p[0] = f"{p[1]}[{p[3]}][{p[5]}]"                
-    elif len(p) == 5:  # One-dimensional array access or variable access or assignment
-        p[0] = f"{p[1]}[{p[3]}]"                             
+            # Function call with two arguments - use parentheses
+            p[0] = f"{p[1]}({p[3]}, {p[5]})"
+    elif len(p) == 5:  # One-dimensional access
+        if is_array:
+            # Array access - use brackets
+            p[0] = f"{p[1]}[{p[3]}]"
+        else:
+            # Function call with one argument - use parentheses
+            p[0] = f"{p[1]}({p[3]})"
     else:
         p[0] = p[1]
-    print('end variable_access:', p[0], flush=True)      
+    logger.debug('end variable_access: %s', p[0])      
  
-all_dcls = ""    
- 
-def p_declaration_list(p):
-    '''declaration_list : declaration_list declaration SEMICOLON
-                        | declaration SEMICOLON'''
-    print('in declaration_list:', f"p[:] values: {p[:]}", flush=True)
-    global all_dcls
-    if len(p) == 4:
-        p[0] = p[1] + [p[2]]
-    else:
-        p[0] = [p[1]]
-       
-    all_dcls = ', '.join(p[0])
-    print('all_dcls:', all_dcls, flush=True) 
-        
-    print('end declaration_list:', p[0], flush=True)    
+all_dcls = ""
 
-   
+#Define an accumulator variable (outside any rule)
+all_decls = []
+
+# Track declared arrays to distinguish array access from function calls
+declared_arrays = set()
+
+# Track declared variable types for pass-by-reference support at call sites
+declared_var_types = {}
+
+def p_declaration_list(p):
+    """
+    declaration_list : declaration SEMICOLON declaration_list
+                     | declaration_list declaration SEMICOLON
+                     | declaration SEMICOLON
+                     | empty
+    """
+    logger.debug('in declaration_list: p values: %s', p[:])   
+    global all_dcls
+    if len(p) == 2:  # empty
+        p[0] = []
+    elif len(p) == 3:  # Single declaration
+        p[0] = [p[1]]
+    elif len(p) == 4:  # Appending to list or prepending to list
+        if p[1] == p.slice[1].type:  # If p[1] is a list (declaration_list)
+            p[0] = p[1] + [p[2]]
+        else:
+            p[0] = [p[1]] + p[3]  # p[1] is a single declaration, p[3] is the list
+            
+    all_dcls = ', '.join(p[0])
+    logger.debug('all_dcls: %s', all_dcls)
+
+    logger.debug('end all_dcls, p[0]: %s', p[0])
+    
 def p_declaration(p):
     '''declaration : DCL id_list type_declaration
-                   | DCL id_list array_spec type_declaration'''
-    print('in declaration:', f"p[:] values: {p[:]}", flush=True)
+                   | DCL id_list array_spec type_declaration
+                   | DCL NUMBER ID COMMA record_field_list'''
     
-    print('p1:', p[1], flush=True)
-    print('p2:', p[2], flush=True)
-    print('p3:', p[3], flush=True)
-         
-    if len(p) == 4:
-       type_str = p[3]
-    else:  
-       type_str = p[4]   
-       print('p4:', p[4], flush=True)
-       
-    match = re.search(r'\((.*?)\)', type_str)
-    if match:
-        lng = int(match.group(1))
+    logger.debug('in declaration: p values: %s', p[:])
+    logger.debug('len(p): %d', len(p))
+    logger.debug('p[1]: %s', p[1]) 
+    logger.debug('p[2]: %s', p[2]) 
+    logger.debug('p[3]: %s', p[3]) 
+    # print("p[4]:", p[4], flush=True) 
+ 
+    if len(p) == 6:  # Record declaration
+       record_name = p[3]
+       record_fields = p[5]
+       decls = [f"class {record_name} {{"]
+       for field in record_fields:
+           level, field_name, field_type = field
+           logger.debug('field_name, field_type: %s %s', field_name, field_type)
+           l = variable_length(field_type)
+           logger.debug('field_length: %s', l)
+           if "CHAR" in field_type:
+               #decls.append(f"    public String {field_name};\n")
+               decls.append(f"byte[] {field_name} = new byte[{l}];")
+           elif "FIXED BIN" in field_type:
+               if l <= 15:
+                   decls.append(f"    public int {field_name};")  
+               else:    
+                   decls.append(f"    public long {field_name};")   
+       decls.append("}")
+       p[0] = "\n".join(decls)     
     else:
-        lng = 0
-    print('lng:', lng, flush=True)    
-    if lng <= 15:
-        inttyp = "int"
-    else:    
-        inttyp = "long"
-    print('type_str,len:', type_str, len, flush=True)
-    decls = []
-    if len(p) == 4:  # Scalar declaration
-        typ = p[3].upper()     
-        print('typ:', typ, flush=True)
-        for var in p[2]:
-            if "FIXED BIN" in typ:               
-               decls.append(f"{inttyp} {var} = 0;")              
-            elif "CHAR" in typ:
-                decls.append(f'String {var} = " ";')  # Initialize CHAR variables as empty strings
-    elif len(p) == 5:  # Array declaration
-        typ = p[4].upper()
-        print('typ:', typ, flush=True)
-        if isinstance(p[3], int):  # Check if size is an integer (one-dimensional)
-            array_dims = (p[3],)  # Convert size to a tuple
-        else:  # Assuming p[3] is a tuple for two-dimensional arrays
-            array_dims = p[3]
-        print('array_dims:', array_dims, flush=True)
+       # Handle other types of declarations
+       type_str = (p[3] if len(p) == 4 else p[4]) or "FIXED BIN"  # Default to FIXED BIN if type_str is None
+       decls = []
+       for var in p[2]:  # id_list
+           if len(p) == 5:  # Array declaration
+               array_spec = p[3]
+               # Register this variable as an array
+               declared_arrays.add(var)
+               logger.debug('Registered array: %s', var)
+               if "CHAR" in type_str:
+                   if isinstance(array_spec, int):  # One-dimensional CHAR array
+                       decls.append(f"String[] {var} = new String[{array_spec + 1}];")
+                       decls.append(f"{var}[0] = \" \";")  # Initialize first element with space for String
+                   elif isinstance(array_spec, tuple):  # Two-dimensional CHAR array
+                       decls.append(f"String[][] {var} = new String[{array_spec[0] + 1}][{array_spec[1] + 1}];")
+                       decls.append(f"{var}[0][0] = \" \";")  # Initialize first element with space for String
+               else:  # Assuming FIXED BIN for other types
+                   if isinstance(array_spec, int):  # One-dimensional int array
+                       decls.append(f"int[] {var} = new int[{array_spec + 1}];")
+                       decls.append(f"{var}[0] = 0;")  # Initialize first element to 0 for int
+                   elif isinstance(array_spec, tuple):  # Two-dimensional int array
+                       decls.append(f"int[][] {var} = new int[{array_spec[0] + 1}][{array_spec[1] + 1}];")
+                       decls.append(f"{var}[0][0] = 0;")  # Initialize first element to 0 for int
+           else:  # Scalar declaration
+               if "CHAR" in type_str:
+                   decls.append(f'String {var} = "";')
+               elif "FIXED BIN" in type_str.upper():
+                   # Check precision to determine int vs long
+                   precision = variable_length(type_str)
+                   if precision is not None and precision > 15:
+                       decls.append(f"long {var} = 0;")
+                   else:
+                       decls.append(f"int {var} = 0;")
+               else:
+                   decls.append(f"int {var} = 0;")
 
-        for var in p[2]:
-            # int[] myIntArray = new int[3];
-            if "FIXED BIN" in typ:
-                if len(array_dims) == 1:
-                    decls.append(f"{inttyp}[]  {var} = new {inttyp}[{array_dims[0] + 2}];")
-                    # Initialize the first element of the array
-                    decls.append(f"{var}[0] = 0; //pseudo-init")
-                elif len(array_dims) == 2:
-                    decls.append(f"{inttyp}[][]  {var} = new {inttyp}[{array_dims[0] + 2}][{array_dims[1] + 2}];")                    
-                    # Initialize the first element of the 2D array
-                    decls.append(f"{var}[0][0] = 0; //pseudo-init")
-            elif "CHAR" in typ:
-                if len(array_dims) == 1:
-                    decls.append(f"String[]  {var} = new String[{array_dims[0] + 2}];")                    
-                    # Initialize the first element of the array
-                    decls.append(f'{var}[0] = ""; //pseudo-init')
-                elif len(array_dims) == 2:                    
-                    decls.append(f"String[][]  {var} = new String[{array_dims[0] + 2}][{array_dims[1] + 2}];")                    
-                    # Initialize the first element of the 2D array
-                    decls.append(f'{var}[0][0] = ""; //pseudo-init')
-                    
-    p[0] = "\n".join(decls)
+       p[0] = "\n".join(decls)
+
+       # Track variable types for pass-by-reference call-site generation
+       if len(p) != 5:  # Not an array declaration
+           for var in p[2]:
+               if "CHAR" in type_str:
+                   declared_var_types[var] = "String"
+               elif "FIXED BIN" in type_str.upper():
+                   precision = variable_length(type_str)
+                   if precision is not None and precision > 15:
+                       declared_var_types[var] = "long"
+                   else:
+                       declared_var_types[var] = "int"
+               else:
+                   declared_var_types[var] = "int"
+
+def p_record_field_list(p):
+    '''record_field_list : record_field
+                         | record_field_list COMMA record_field'''
+    logger.debug('in record_field_list: p values: %s', p[:])
+    if len(p) == 2:  # Single record field
+        p[0] = [p[1]]
+    else:  # Add another field to the list
+        p[0] = p[1] + [p[3]]
+    logger.debug('end record_field_list: %s', p[0])   
     
-    print('end declaration:', p[0], flush=True)
-
+    
+def p_record_field(p):
+    '''record_field : NUMBER ID type_declaration
+                    | NUMBER ID type_declaration LPAREN NUMBER RPAREN'''
+    logger.debug('in record_field: p values: %s', p[:])
+    if len(p) == 6:  # For CHAR(n), FIXED BIN(n), etc.
+        p[0] = (p[1], p[2], f"{p[3]}({p[5]})")
+    else:
+        p[0] = (p[1], p[2], p[3])
+    logger.debug('end record_field: %s', p[0])    
+    
 def p_id_list(p):
     '''id_list : ID
                | INDEXED_ID
                | id_list COMMA ID
                | id_list COMMA ID array_spec'''
-    print('in id_list:', f"p[:] values: {p[:]}", flush=True)             
+    logger.debug('in id_list: p values: %s', p[:])             
     if len(p) == 2:
         p[0] = [p[1]]
     elif len(p) == 4:  # ID or array spec list (comma separated)
@@ -592,7 +815,7 @@ def p_id_list(p):
 def p_array_spec(p):
     '''array_spec : LPAREN NUMBER RPAREN
                  | LPAREN NUMBER COMMA NUMBER RPAREN'''
-    print('in array_spec:', f"p[:] values: {p[:]}", flush=True)               
+    logger.debug('in array_spec: p values: %s', p[:])               
     if len(p) == 4:
         p[0] = (p[2])  # One-dimensional array
     elif len(p) == 6:
@@ -601,19 +824,25 @@ def p_array_spec(p):
 def p_type_declaration(p):
     '''type_declaration : FIXED BIN LPAREN NUMBER RPAREN
                         | CHAR LPAREN NUMBER RPAREN'''
-    print('in type_declaration:', f"p[:] values: {p[:]}", flush=True)                    
+    logger.debug('in type_declaration: p values: %s', p[:])                    
     if len(p) == 6:  # FIXED BIN(n)
-        #p[0] = f"{p[1]} {p[2]}({p[4] + 2})" #additional dummy first entry!
         p[0] = f"{p[1]} {p[2]}({p[4]})"
     elif p[1].lower() == 'char':  # CHAR(n)
-        p[0] = f"{p[1]}({p[3]})"
+        p[0] = f"CHAR({p[3]})"    
 
+# returns numeric value between parentheses        
+def variable_length(pl1_type):   
+    match = re.search(r'\(([\d]+)\)', pl1_type)
+    if match:
+       return int(match.group(1))
+    else:
+       return None         
 
 def p_statement_list(p):
     '''statement_list : statement_list statement  
                       | statement     
                       | empty'''
-    print('in statement_list:', f"p[:] values: {p[:]} (len: {len(p)})", flush=True)
+    logger.debug('in statement_list: p values: %s (len: %d)', p[:], len(p))
     
     if len(p) == 3:  # Recursive case: multiple statements
         if isinstance(p[1], list):
@@ -623,19 +852,20 @@ def p_statement_list(p):
     else:
         p[0] = [p[1]] if p[1] else []
     
-    print('end statement_list:', p[0], flush=True)
+    logger.debug('end statement_list: %s', p[0])
 
 def p_empty(p):
     'empty :'
     p[0] = None  # Use None to signify an empty production
     
 
-def p_statement(p):    
-    '''statement : assignment_statement  
-                 | declaration                 
+def p_statement(p):
+    '''statement : assignment_statement
+                 | declaration
                  | if_statement
                  | select_statement
                  | do_while_statement
+                 | do_from_to_statement
                  | do_end_block
                  | put_statement
                  | get_list_statement
@@ -643,24 +873,73 @@ def p_statement(p):
                  | open_file
                  | read_file
                  | write_file
-                 | close_file                
-                 | sql_statement'''             
-                  
-    print('in statement:', f"p[:] values: {p[:]}", flush=True)             
+                 | close_file
+                 | proc_statement
+                 | call_statement
+                 | sql_statement
+                 | return_statement'''
+
+    logger.debug('in statement: p values: %s', p[:])
     p[0] = p[1]
-    print('end statement:', p[0], flush=True) 
+    logger.debug('end statement: %s', p[0])
+
+def p_return_statement(p):
+    '''return_statement : RETURN LPAREN expression RPAREN SEMICOLON'''
+    logger.debug('in return_statement: p values: %s', p[:])
+    p[0] = f"return {p[3]};"
+    logger.debug('end return_statement: %s', p[0])
+    
+def p_call_statement(p):
+    '''call_statement : CALL ID LPAREN parameter_list RPAREN SEMICOLON
+                      | CALL ID LPAREN RPAREN SEMICOLON'''
+    logger.debug('in call_statement: p values: %s', p[:])
+    if len(p) == 6:  # Without parameters
+        p[0] = f"{p[2]}();"
+        return
+
+    proc_name = p[2]
+    args = [a.strip() for a in p[4].split(',')]
+
+    # Pass-by-reference: wrap each argument in a type[] array, copy back after call
+    import re as _re
+    _simple_id = _re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+
+    lines = []
+    ref_args = []
+    copy_backs = []
+    for i, arg in enumerate(args):
+        ref_name = f"_ref{i}"
+        if _simple_id.match(arg):
+            var_type = declared_var_types.get(arg, 'long')
+            if var_type == 'String':
+                lines.append(f'String[] {ref_name} = new String[]{{{arg}}};')
+            else:
+                lines.append(f'{var_type}[] {ref_name} = new {var_type}[]{{{arg}}};')
+            ref_args.append(ref_name)
+            copy_backs.append(f'{arg} = {ref_name}[0];')
+        else:
+            # Expression argument — pass a temporary array; no copy-back possible
+            lines.append(f'long[] {ref_name} = new long[]{{(long)({arg})}};')
+            ref_args.append(ref_name)
+
+    ref_args_str = ', '.join(ref_args)
+    lines.append(f'{proc_name}({ref_args_str});')
+    lines.extend(copy_backs)
+    p[0] = '\n'.join(lines)
+    logger.debug('end call_statement: %s', p[0])
+        
     
 def p_block_comment_statement(p):
     '''block_comment_statement : BLOCK_COMMENT'''
-    print('in block_comment_statement:', f"p[:] values: {p[:]}", flush=True)
+    logger.debug('in block_comment_statement: p values: %s', p[:])
     p[0] = "//" + p[0]
 
 def p_assignment_statement(p):
     '''assignment_statement : variable_access ASSIGN expression SEMICOLON'''
-    print('in assignment:', f"p[:] values: {p[:]}", flush=True)
-    print('in assignment,length:', len(p), flush=True)
+    logger.debug('in assignment: p values: %s', p[:])
+    logger.debug('in assignment,length: %d', len(p))
     p[0] = f"{p[1]} = {p[3]};"
-    print('end assignment:', p[0], flush=True)
+    logger.debug('end assignment: %s', p[0])
 
 def p_expression(p):
     '''expression : expression PLUS expression
@@ -668,6 +947,7 @@ def p_expression(p):
                   | expression TIMES expression
                   | expression DIVIDE expression
                   | LPAREN expression RPAREN
+                  | ID
                   | NUMBER
                   | CHAR_CONST
                   | SUBSTR
@@ -675,8 +955,8 @@ def p_expression(p):
                   | INDEX
                   | DECIMAL
                   | variable_access'''
-    print('in expression:', f"p[:] values: {p[:]}", flush=True)
-    print('in expression,length:', len(p), flush=True)   
+    logger.debug('in expression: p values: %s', p[:])
+    logger.debug('in expression,length: %d', len(p))   
           
     if len(p) == 2:
         # This handles single ID or NUMBER tokens
@@ -687,43 +967,66 @@ def p_expression(p):
     else:
         # This handles binary operations like PLUS, MINUS, etc.
         p[0] = f"({p[1]} {p[2]} {p[3]})"
-    print('end expression:', p[0], flush=True)    
+    logger.debug('end expression: %s', p[0])    
         
+def p_expression_function_call(p):
+    '''expression : ID LPAREN parameter_list RPAREN
+                  | ID LPAREN RPAREN'''
+    logger.debug('in expression_function_call: p values: %s', p[:])
+    if len(p) == 5:  # Function call with arguments
+        p[0] = f"{p[1]}({p[3]})"
+    else:  # Function call without arguments
+        p[0] = f"{p[1]}()"
+    logger.debug('end expression_function_call: %s', p[0])
+
 def p_expression_substr(p):
     '''expression : SUBSTR LPAREN ID COMMA NUMBER COMMA NUMBER RPAREN
-                  | SUBSTR LPAREN ID COMMA NUMBER RPAREN'''                 
-             
-    print('in substr:', f"p[:] values: {p[:]}", flush=True)              
+                  | SUBSTR LPAREN ID COMMA NUMBER RPAREN'''
+
+    logger.debug('in substr: p values: %s', p[:])              
     if len(p) == 9:  # SUBSTR with start and length
         start = p[5] - 1  # PL/I starts at 1, Python starts at 0
         length = p[7]
         p[0] = f"{p[3]}.substring({start},{start + length})"
     elif len(p) == 7:  # SUBSTR with only start
         start = p[5] - 1
-        p[0] = f"{p[3]}.substring({start}:)"
-    print('end substr:', p[0], flush=True)    
+        # In Java substring(start) returns substring from start to end
+        p[0] = f"{p[3]}.substring({start})"
+    logger.debug('end substr: %s', p[0])    
     
 def p_expression_mod(p):
     '''expression : MOD LPAREN ID COMMA NUMBER RPAREN'''
-    print('in mod:', f"p[:] values: {p[:]}", flush=True)              
+    logger.debug('in mod: p values: %s', p[:])              
     p[0] = f"{p[3]}%{p[5]}"
-    print('end substr:', p[0], flush=True)        
+    logger.debug('end substr: %s', p[0])  
+
+def p_expression_random(p):
+    '''expression : RANDOM LPAREN RPAREN
+                  | RANDOM LPAREN expression RPAREN
+                  | RANDOM LPAREN expression COMMA expression RPAREN'''
+    logger.debug('in random: p values: %s', p[:])              
+    if len(p) == 4:  # RANDOM()
+        p[0] = "RndRuntime.random(100)"
+    elif len(p) == 5:  # RANDOM(bound)
+        p[0] = f"RndRuntime.random({p[3]})"
+    elif len(p) == 7:  # RANDOM(lower, upper)
+        p[0] = f"RndRuntime.random({p[3]}, 0)"      
         
 def p_expression_index(p):
     '''expression : INDEX LPAREN ID COMMA CHAR_CONST RPAREN'''    
-    print('in index:', f"p[:] values: {p[:]}", flush=True) 
+    logger.debug('in index: p values: %s', p[:]) 
                  
     p[0] = f"{p[3]}.indexOf({p[5]}) + 1"   
-    print('end index:', p[0], flush=True)  
+    logger.debug('end index: %s', p[0])  
     
 def p_expression_decimal(p):
     '''expression : DECIMAL LPAREN ID RPAREN''' 
-    print('in decimal:', f"p[:] values: {p[:]}", flush=True)              
+    logger.debug('in decimal: p values: %s', p[:])              
     
     # Convert the ID to a string using Java's String.valueOf() function
     p[0] = f"String.valueOf({p[3]})"
     
-    print('end decimal:', p[0], flush=True)
+    logger.debug('end decimal: %s', p[0])
         
 def p_if_statement(p):
     '''if_statement : IF relational_expression THEN statement ELSE statement   
@@ -731,8 +1034,8 @@ def p_if_statement(p):
                     | IF relational_expression THEN do_end_block ELSE statement  
                     | IF relational_expression THEN do_end_block ELSE do_end_block'''
     
-    print('in if_statement:', f"p[:] values: {p[:]}", flush=True)  
-    print('len:', len(p), flush=True)                
+    logger.debug('in if_statement: p values: %s', p[:])  
+    logger.debug('len: %d', len(p))                
     
     # Check if p[4] (then block) is a list, otherwise wrap it in a list
     then_block = p[4] if isinstance(p[4], list) else [p[4]]
@@ -749,9 +1052,9 @@ def p_if_statement(p):
 
 def p_do_end_block(p):
     '''do_end_block : DO SEMICOLON statement_list END SEMICOLON'''
-    print('in do_end:', f"p[:] values: {p[:]}", flush=True) 
+    logger.debug('in do_end: p values: %s', p[:]) 
     p[0] = ["{"] + p[3] + ["}"]
-    print('end do_end:', p[0], flush=True)
+    logger.debug('end do_end: %s', p[0])
 
 # Relational expressions to handle comparisons
 def p_relational_expression(p):
@@ -762,12 +1065,12 @@ def p_relational_expression(p):
                              | expression GT expression
                              | expression GE expression
                              | expression ASSIGN expression'''
-    print('in relational_expression:', f"p[:] values: {p[:]}", flush=True)                           
+    logger.debug('in relational_expression: p values: %s', p[:])                           
     if p[2] == '=':
         p[0] = f"({p[1]} == {p[3]})"
     else:
         p[0] = f"({p[1]} {p[2]} {p[3]})"
-    print('end relational_expression:', p[0], flush=True) 
+    logger.debug('end relational_expression: %s', p[0]) 
 
 def p_expression_concat(p):
     '''expression : expression CONCAT expression'''
@@ -777,33 +1080,12 @@ def p_expression_concat(p):
 def p_put_statement(p): 
     '''put_statement : PUT SKIP LIST LPAREN element_list RPAREN SEMICOLON'''
    
-    print('in put_statement:', f"p[:] values: {p[:]}", flush=True)
+    logger.debug('in put_statement: p values: %s', p[:])
     #elements = "+ ".join(map(str, p[5]))
     elements = "+ ".join(map(lambda x: x.replace("'", '"'), map(str, p[5])))
-    print('end put_statement:', elements, flush=True)
+    logger.debug('end put_statement: %s', elements)
 
     p[0] = f"System.out.println({elements});"
-    
-# def p_get_list_statement(p):
-#     '''get_list_statement : GET LIST LPAREN id_list RPAREN SEMICOLON'''
-#     print('in get_list:', f"p[:] values: {p[:]}", flush=True)
-#     vars_to_get = p[4]  # List of variable names
-    
-#     # Generate input statements with dynamic type checking
-#     python_input_statements = []
-#     for var in vars_to_get:
-#         python_input_statements.append(f'''
-                                       
-# try:
-#     {var}_input = input("Enter {var}: ")
-#     {var} = int({var}_input)
-# except ValueError:
-#     {var} = {var}_input  # Fall back to string if not an integer
-# ''')
-    
-#     # Join statements to form the complete block of code
-#     p[0] = '\n'.join(python_input_statements)
-#     print('end get_list:', p[0], flush=True)
     
 def p_get_list_statement(p):
     '''get_list_statement : GET LIST LPAREN id_list RPAREN SEMICOLON'''
@@ -812,13 +1094,13 @@ def p_get_list_statement(p):
     # Improved Java code generation with type handling and error checking
     java_code = ""
     for var_name in var_names:
-        print('var_name:', var_name, flush=True)
+        logger.debug('var_name: %s', var_name)
         # Assuming you have a way to determine the type of var_name
         var_type = get_variable_type(var_name, all_dcls)  # Pass the variable name and all declarations
 
         java_code += f"System.out.print(\"Enter {var_name}: \");\n"
         
-        print('var_type:', var_type, flush=True)
+        logger.debug('var_type: %s', var_type)
 
         # Use appropriate input methods based on variable type
         if var_type == "int":
@@ -829,7 +1111,7 @@ def p_get_list_statement(p):
             java_code += f"{var_name} = scanner.nextLine();\n"
         else:
             # Handle unknown types gracefully
-            print(f"Warning: Unknown type '{var_type}' for variable '{var_name}'. Assuming String.")
+            logger.warning("Unknown type '%s' for variable '%s'. Assuming String.", var_type, var_name)
             java_code += f"{var_name} = scanner.nextLine();\n"
 
     p[0] = java_code
@@ -838,15 +1120,15 @@ def p_get_list_statement(p):
 import re
 
 def get_variable_type(variable_name, declarations):
-    print('declarations:', declarations, flush=True)
-    print('variable_name:', variable_name, flush=True)
+    logger.debug('declarations: %s', declarations)
+    logger.debug('variable_name: %s', variable_name)
     # Regular expression to match variable declarations
     pattern = r"(int|String|long)\s+(\w+)\s*="
     # Find all matches in the declarations
     matches = re.findall(pattern, declarations)
     # Create a dictionary to store variable types
     variable_types = {name: vtype for vtype, name in matches}
-    print('variable_types:', variable_types, flush=True)
+    logger.debug('variable_types: %s', variable_types)
     # Return the type of the requested variable
     return variable_types.get(variable_name, "Variable not found")
 
@@ -855,47 +1137,46 @@ def get_variable_type(variable_name, declarations):
 # List of variable names (e.g., var1, var2, var3)
 def p_id_list_multiple(p):
     '''id_list : ID COMMA id_list'''
-    print('in ID_list:', f"p[:] values: {p[:]}", flush=True) 
+    logger.debug('in ID_list: p values: %s', p[:]) 
     p[0] = [p[1]] + p[3]  # Combine current ID with rest of the list
 
 
 def p_element_list(p):
     '''element_list : element
                     | element_list COMMA element'''
-    print('in element_list:', f"p[:] values: {p[:]}", flush=True)                
+    logger.debug('in element_list: p values: %s', p[:])
     if len(p) == 2:
         p[0] = [p[1]]
     else:
         p[0] = p[1] + [p[3]]
-    print('end element_list:', p[0], flush=True)    
+    logger.debug('end element_list: %s', p[0])
 
 def p_element(p):
     '''element : ID
                | ID LPAREN NUMBER RPAREN
                | ID LPAREN NUMBER COMMA NUMBER RPAREN
                | NUMBER
-               | CHAR_CONST               
+               | CHAR_CONST
                '''
-    print('in element:', f"p[:] values: {p[:]}", flush=True) 
+    logger.debug('in element: p values: %s', p[:])
     if len(p) == 5:
-       p[0] = p[1] + "[" + str(p[3]) + "]" 
-    else:    
-        if len(p) == 7:
-           p[0] = p[1] + "[" + str(p[3]) + "]" + "[" + str(p[5]) + "]"
-        else:   
-           p[0] = p[1]
-    print('end element:', p[0])
+        p[0] = p[1] + "[" + str(p[3]) + "]"
+    elif len(p) == 7:
+        p[0] = p[1] + "[" + str(p[3]) + "]" + "[" + str(p[5]) + "]"
+    else:
+        p[0] = p[1]
+    logger.debug('end element: %s', p[0])
 
 
 def p_select_statement(p):
     '''select_statement : SELECT LPAREN expression RPAREN SEMICOLON when_list other_statement END SEMICOLON'''
-    print('in select_statement:', f"p[:] values: {p[:]}")
+    logger.debug('in select_statement: p values: %s', p[:])
 
     # Start building the if-elif-else structure
     select_var = p[3]
     when_cases = p[6]  # when_list provides a list of tuples (condition, code block)
 
-    print('when_cases:', when_cases)
+    logger.debug('when_cases: %s', when_cases)
 
     # Create the initial if statement
     python_code = f"if ({select_var} == {when_cases[0][0]})\n{indent_block(when_cases[0][1], level=1)}"    
@@ -913,12 +1194,12 @@ def p_select_statement(p):
     python_code += "\n //end-select"
 
     p[0] = "//select-start \n" + python_code
-    print('end select_statement:', p[0])
+    logger.debug('end select_statement: %s', p[0])
 
 
 def p_select_end(p):
     '''select_end : END SEMICOLON'''
-    print('in select_end:', f"p[:] values: {p[:]}", flush=True)
+    logger.debug('in select_end: p values: %s', p[:])
     p[0] = "end select"
 
 def p_when_list(p):
@@ -927,8 +1208,8 @@ def p_when_list(p):
                  | WHEN LPAREN expression RPAREN statement  
                  | WHEN LPAREN expression RPAREN do_end_block
                  | empty'''    
-    print('in when_list:', f"p[:] values: {p[:]}", flush=True)
-    print('len(p):', len(p), flush=True)
+    logger.debug('in when_list: p values: %s', p[:])
+    logger.debug('len(p): %d', len(p))
 
     # Add 'when' clauses as tuples of (condition, flattened statement)
     if len(p) == 7:  # This is for "when_list WHEN ( expression ) statement" format
@@ -942,13 +1223,13 @@ def p_when_list(p):
         statement_block = "\n".join(p[5]) if isinstance(p[5], list) else p[5]
         p[0] = [(p[3], statement_block)]
 
-    print('end when_list:', p[0], flush=True)
+    logger.debug('end when_list: %s', p[0])
 
 def p_other_statement(p):
     '''other_statement : OTHER statement  
                        | OTHER do_end_block
                        | empty'''
-    print('in other_statement:', f"p[:] values: {p[:]}")
+    logger.debug('in other_statement: p values: %s', p[:])
 
     if len(p) > 1 and p[2]:  # If there is an 'other' clause
         if isinstance(p[2], list):  # Flatten if it's a list
@@ -958,30 +1239,57 @@ def p_other_statement(p):
     else:
         p[0] = ""
 
-    print('end other_statement:', p[0])
+    logger.debug('end other_statement: %s', p[0])
 
 
 def p_do_while_statement(p):
     '''do_while_statement : DO WHILE LPAREN relational_expression RPAREN SEMICOLON statement do_end
                           | DO WHILE LPAREN relational_expression RPAREN SEMICOLON statement_list do_end'''                       
-    print('in do_while_statement:', f"p[:] values: {p[:]}", flush=True) 
+    logger.debug('in do_while_statement: p values: %s', p[:]) 
 
     # Get the relational expression (condition) and the loop body
     loop_condition = p[4]  # This holds the relational expression
     stmt = ''
     if isinstance(p[7], list):        
         loop_body = "\n".join([stmt for stmt in p[7]])        
-        print('stmt in do_while_statement:', loop_body, flush=True)
+        logger.debug('stmt in do_while_statement: %s', loop_body)
     else:
         loop_body = p[7]
-        print('p[7] is no list:', p[7], flush=True)
+        logger.debug('p[7] is no list: %s', p[7])
     loop_body = indent_block(loop_body, level + 1)    
     
     # Translate to Python's 'while' construct    
     loop_body = loop_body + "\n" + "} //end simulated" 
     p[0] = f"while {loop_condition} {{\n{loop_body}"
         
-    print('end do_while_statement:', p[0], flush=True)
+    logger.debug('end do_while_statement: %s', p[0])
+    
+
+def p_do_from_to_statement(p):
+    '''do_from_to_statement : DO ID ASSIGN expression TO expression SEMICOLON statement do_end
+                            | DO ID ASSIGN expression TO expression SEMICOLON statement_list do_end'''
+                            
+    
+    logger.debug('in do_from_to_statement: p values: %s', p[:])
+
+    loop_variable = p[2]  # Variable der Schleife
+    start_expr = p[4]     # Startwert
+    end_expr = p[6]       # Endwert
+    
+    # Loop body verarbeiten
+    if isinstance(p[8], list):
+        loop_body = "\n".join(p[8])
+    else:
+        loop_body = p[8]
+
+    loop_body = indent_block(loop_body, level + 1)
+
+    # In eine Java-ähnliche for-Schleife übersetzen
+    loop_body += "\n} // end simulated"
+    p[0] = f"for ({loop_variable} = {start_expr}; {loop_variable} <= {end_expr}; {loop_variable}++) {{\n{loop_body}"
+
+    print('end do_from_to_statement:', p[0], flush=True)
+    
     
 def p_do_end(p):
     '''do_end : END SEMICOLON'''
@@ -1055,7 +1363,7 @@ def p_sql_statement(p):
     sql_query = p[3].strip('"')
     pl1_var = p[5]
     var_type = get_variable_type(pl1_var, all_dcls) 
-    # print('var_type:', pl1_var, var_type, flush=True)
+    print('var_type:', pl1_var, var_type, flush=True)
     add_to_result = "" 
     if var_type == "int":
        add_to_result = "Integer.parseInt(result);\n" 
@@ -1065,11 +1373,12 @@ def p_sql_statement(p):
         else:  
             add_to_result = "result;\n" # only int, long, String types are supported
        
-    # Read SQL credentials from a text file
+    # Read SQL credentials from a text file. Generated Java will read an env-var
+    # `PLIJAVA_CREDS_FILE` if set; otherwise falls back to c:/temp/creds.txt
     p[0] = f'''
-        filePath = "c:/temp/creds.txt"; // Path to the credentials file
+        filePath = System.getenv("PLIJAVA_CREDS_FILE") != null ? System.getenv("PLIJAVA_CREDS_FILE") : "c:/temp/creds.txt"; // Path to the credentials file
         sql_statement =  "{sql_query}"; // SQL statement to be executed       
-        credentials = parseCredentials(filePath);
+        credentials = PliJavaRuntime.parseCredentials(filePath);
         dbsys = credentials.get("dbsys");
         jdbc_path = credentials.get("jdbc_path");
         port = credentials.get("port");
@@ -1078,16 +1387,16 @@ def p_sql_statement(p):
         password = credentials.get("password");
         dbName = credentials.get("database");
                 
-        dbsys = dbsys.replace('"', ' ').trim();
-        jdbc_path = jdbc_path.replace('"', ' ').trim();
-        port = port.replace('"', ' ').trim();
-        host = host.replace('"', ' ').trim();
-        user = user.replace('"', ' ').trim();
-        password = password.replace('"', ' ').trim(); 
-        dbName = dbName.replace('"', ' ').trim();
-        result = executeQuery(dbsys, jdbc_path, port, sql_statement, host, dbName, user, password);        
-        //System.out.println("PL1var:" + {pl1_var} + ":" + "{var_type}");        
-        {pl1_var} = {add_to_result};             
+        dbsys = dbsys.replace('\"', ' ').trim();
+        jdbc_path = jdbc_path.replace('\"', ' ').trim();
+        port = port.replace('\"', ' ').trim();
+        host = host.replace('\"', ' ').trim();
+        user = user.replace('\"', ' ').trim();
+        password = password.replace('\"', ' ').trim(); 
+        dbName = dbName.replace('\"', ' ').trim();
+        result = PliJavaRuntime.executeQuery(dbsys, jdbc_path, port, sql_statement, host, dbName, user, password);
+        //System.out.println("PL1var:" + {pl1_var} + ":" + "{var_type}");
+        {pl1_var} = {add_to_result};
                      '''
 #{pl1_var}  = ((Number) result1).longValue();               
 def p_pl1_var(p):
@@ -1102,6 +1411,7 @@ def p_error(p):
         print(f"Syntax error at token '{p.value}'", flush=True)
     else:
         print("Syntax error at EOF", flush=True)
+        
         
 parser = yacc.yacc(debug=True, write_tables=True, outputdir='.')
 
@@ -1144,6 +1454,14 @@ from tkinter import filedialog
 
 # Global variable to store the selected file path
 selected_file_path = None
+
+# Allow non-interactive runs by reading `PLIJAVA_INPUT_FILE` env var
+env_input = os.environ.get("PLIJAVA_INPUT_FILE")
+if env_input:
+    if os.path.exists(env_input):
+        selected_file_path = env_input
+    else:
+        logger.warning("PLIJAVA_INPUT_FILE is set but file does not exist: %s", env_input)
 
 def select_file():
     """Opens a file dialog for the user to select a PL/I file if not already selected."""
@@ -1207,11 +1525,19 @@ def execute_transpiler(java_code, class_name):
     import subprocess
     import time
     from pathlib import Path
+    import shutil
     
-    # Step 0: Set JAVA_HOME to the path of your compatible JDK
-    # HARDCODED, please change this later!
-    os.environ["JAVA_HOME"] = "C:\\Program Files\\Microsoft\\jdk-21.0.1.12-hotspot"   
-   
+    # Step 0: Resolve JAVA_HOME (use environment if set, fall back to PATH discovery)
+    java_home = os.environ.get("JAVA_HOME") or os.environ.get("JDK_HOME")
+    if not java_home:
+        javac_path = shutil.which("javac")
+        if javac_path:
+            # assume JDK bin sits in .../bin/javac
+            java_home = os.path.dirname(os.path.dirname(javac_path))
+        else:
+            # fallback to previous hardcoded path (kept for compatibility)
+            java_home = r"C:\Program Files\Semeru\jdk-26.0.0.35-openj9"
+    os.environ["JAVA_HOME"] = java_home
     process = subprocess.run(["where", "java"], capture_output=True, text=True)
     print("Where is Java:" + process.stdout)
     
@@ -1222,9 +1548,12 @@ def execute_transpiler(java_code, class_name):
         file.write(java_code)
         
     print("===Formatted JAVA code:==========================")
-    subprocess.run(["astyle.exe", java_filename])
+    try:
+        subprocess.run(["astyle.exe", java_filename], check=False)
+    except FileNotFoundError:
+        print("Note: astyle.exe not found, skipping code formatting")
 
-    with open(java_filename, "r", encoding="utf-8") as file:    
+    with open(java_filename, "r", encoding="utf-8") as file:
        for line in file:
           print(line, end="")  # Print the line and suppress newline
      
@@ -1247,23 +1576,22 @@ def execute_transpiler(java_code, class_name):
     file_with_path = os.path.join(path, java_filename)
     #print('***fullname:', file_with_path, flush=True)
     
-    compile_process = subprocess.run(["javac  " , file_with_path], capture_output=True, text=True)
+    # prefer javac from resolved JAVA_HOME, otherwise use system path
+    javac_path = os.path.join(java_home, "bin", "javac") if java_home else shutil.which("javac")
+    if not os.path.exists(javac_path):
+        javac_path = shutil.which("javac")
+    classpath = f'.{os.pathsep}{JAVALIB_DIR}'
+    compile_process = subprocess.run([javac_path, '-cp', classpath, file_with_path], capture_output=True, text=True)
     if compile_process.returncode != 0:
         print("Compilation failed:", compile_process.stderr)
         return
     print('*** after_java_filename:', java_filename, flush=True)
 
-    # Step 3: Execute the Java class   
-    # Path is HARDCODED, please change this later!
-       
-    run_process = subprocess.run(
-    [
-        "C:\\Program Files\\Microsoft\\jdk-21.0.1.12-hotspot\\bin\\java",       
-        class_name
-    ],
-    capture_output=True,
-    text=True
-    )
+    # Step 3: Execute the Java class
+    java_exe = os.path.join(java_home, "bin", "java") if java_home else shutil.which("java")
+    if not os.path.exists(java_exe):
+        java_exe = shutil.which("java") or "java"
+    run_process = subprocess.run([java_exe, '-cp', classpath, class_name], capture_output=True, text=True)
     
     print('*** classname:', class_name, flush=True)
                       
@@ -1286,8 +1614,8 @@ def execute_transpiler(java_code, class_name):
     #     os.remove(class_file)
 
 # If you need all tokens...
-# print("Tokens:") 
-# print_tokens(pl1_code)
+print("Tokens:") 
+print_tokens(pl1_code)
 
 # =============================================================================
 # Print the input PL/I, the generated Python code, as well the execution result

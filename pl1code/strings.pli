@@ -6,7 +6,7 @@ put skip list('***running strings***');
   x = 'abc';
   put skip list('x before concat:', x);
   x = x || '-xyz';
-  put skip list('x after concat:', x);
+  put skip list('x after concat with -xyz:', x);
   x = substr(x,2,2);
   put skip list('x after substr(x,2,2):', x);
   y = index(x,'c');

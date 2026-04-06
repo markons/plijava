@@ -1,0 +1,6 @@
+test06: proc options(main);
+    dcl i fixed bin(15);
+    do i = 1 to 5;
+        put skip list('i=', i);
+    end;
+end test06;

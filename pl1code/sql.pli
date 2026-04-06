@@ -12,6 +12,7 @@ host="localhost", user="root", password="admin", database="sakila"
 */  
  
 dcl x char(10); 
+dcl z char(30); 
 dcl y   char(10); /*fixed bin(31);*/   
 put skip list('***running sql for mySql DB ***');
   x = 'abc';

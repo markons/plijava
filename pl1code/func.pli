@@ -1,0 +1,35 @@
+/* Test program for RETURNS clause */
+testret: proc options(main);
+    dcl x fixed bin(15);
+    dcl y fixed bin(15);
+    dcl z fixed bin(31);
+
+    x = 5;
+    y = 10;
+
+    /* Call the function and capture return value */
+    z = myfunc(x);
+
+    put skip list('Result of myfunc(5):', z);
+
+    z = adder(x, y);
+    put skip list('Result of adder(5, 10):', z);
+
+/* Function that doubles a number */
+myfunc: proc(n) returns(fixed bin(31));
+    dcl n fixed bin(15);
+    dcl result fixed bin(31);
+    result = n * 2;
+    return(result);
+end;
+
+/* Function that adds two numbers */
+adder: proc(a, b) returns(fixed bin(31));
+    dcl a fixed bin(15);
+    dcl b fixed bin(15);
+    dcl sum fixed bin(31);
+    sum = a + b;
+    return(sum);
+end;
+
+end testret;

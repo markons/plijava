@@ -1,0 +1,16 @@
+test16: proc options(main);
+    dcl a char(5);
+    dcl b char(5);
+    dcl c char(10);
+    a = 'hello';
+    b = 'world';
+    c = joiner(a, b);
+    put skip list('joined:', c);
+joiner: proc(x, y) returns(char(10));
+    dcl x char(5);
+    dcl y char(5);
+    dcl z char(10);
+    z = x || y;
+    return(z);
+end;
+end test16;

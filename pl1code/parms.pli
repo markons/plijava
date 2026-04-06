@@ -1,0 +1,15 @@
+ MYPROG: PROC OPTIONS(MAIN);
+    DCL X FIXED BIN(31);
+    DCL Y FIXED BIN(31);
+    X = 5;
+	put skip list('x=',x);
+    CALL SUBPROC(X, Y);    
+	put skip list('y=',y);
+ END MYPROG;
+
+ SUBPROC: PROC(A, B);
+    DCL A FIXED BIN(31);
+    DCL B FIXED BIN(31);
+	
+    B = A + 10;
+ END SUBPROC;

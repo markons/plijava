@@ -1,0 +1,13 @@
+test15: proc options(main);
+    dcl x fixed bin(15);
+    dcl r fixed bin(31);
+    x = 7;
+    r = double(x);
+    put skip list('double(7)=', r);
+double: proc(n) returns(fixed bin(31));
+    dcl n fixed bin(15);
+    dcl res fixed bin(31);
+    res = n * 2;
+    return(res);
+end;
+end test15;

@@ -1,0 +1,9 @@
+test07: proc options(main);
+    dcl arr(5) fixed bin(15);
+    arr(1) = 10;
+    arr(2) = 20;
+    arr(3) = 30;
+    put skip list('arr(1)=', arr(1));
+    put skip list('arr(2)=', arr(2));
+    put skip list('arr(3)=', arr(3));
+end test07;

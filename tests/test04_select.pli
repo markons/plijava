@@ -1,0 +1,10 @@
+test04: proc options(main);
+    dcl x fixed bin(15);
+    x = 2;
+    select(x);
+        when(1) put skip list('one');
+        when(2) put skip list('two');
+        when(3) put skip list('three');
+        other put skip list('other');
+    end;
+end test04;

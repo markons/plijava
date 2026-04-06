@@ -1,0 +1,9 @@
+test09: proc options(main);
+    dcl a char(5);
+    dcl b char(5);
+    dcl c char(10);
+    a = 'hello';
+    b = 'world';
+    c = a || b;
+    put skip list('concat:', c);
+end test09;

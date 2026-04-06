@@ -1,0 +1,15 @@
+test02: proc options(main);
+    dcl a fixed bin(15);
+    dcl b fixed bin(15);
+    dcl c fixed bin(15);
+    a = 10;
+    b = 3;
+    c = a + b;
+    put skip list('a+b=', c);
+    c = a - b;
+    put skip list('a-b=', c);
+    c = a * b;
+    put skip list('a*b=', c);
+    c = a / b;
+    put skip list('a/b=', c);
+end test02;

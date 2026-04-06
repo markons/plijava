@@ -1,0 +1,8 @@
+test03: proc options(main);
+    dcl x fixed bin(15);
+    x = 5;
+    if x > 3 then
+        put skip list('x is greater than 3');
+    else
+        put skip list('x is not greater than 3');
+end test03;

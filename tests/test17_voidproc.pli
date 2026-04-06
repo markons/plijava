@@ -1,0 +1,9 @@
+test17: proc options(main);
+    dcl x fixed bin(15);
+    x = 99;
+    call printer(x);
+printer: proc(n);
+    dcl n fixed bin(15);
+    put skip list('value is:', n);
+end;
+end test17;

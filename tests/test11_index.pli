@@ -1,0 +1,7 @@
+test11: proc options(main);
+    dcl s char(20);
+    dcl n fixed bin(15);
+    s = 'hello world';
+    n = index(s, ' ');
+    put skip list('space at position:', n);
+end test11;

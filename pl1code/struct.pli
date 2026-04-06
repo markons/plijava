@@ -1,0 +1,10 @@
+struct: PROC OPTIONS(MAIN);
+/* test arithmetic expression, pus skip, multiline comment  */
+DCL 1 EMPLOYEE,
+       2 NAME CHAR(20),
+       2 AGE FIXED BIN(15),
+       2 SALARY FIXED BIN(15); 
+ 
+    put skip list('***running struct***');
+  
+end struct;

@@ -1,0 +1,7 @@
+test13: proc options(main);
+    dcl x fixed bin(15);
+    dcl s char(10);
+    x = 42;
+    s = decimal(x);
+    put skip list('decimal:', s);
+end test13;

@@ -1,0 +1,7 @@
+test10: proc options(main);
+    dcl s char(10);
+    dcl t char(5);
+    s = 'helloworld';
+    t = substr(s, 1, 5);
+    put skip list('substr:', t);
+end test10;

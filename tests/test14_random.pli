@@ -1,0 +1,5 @@
+test14: proc options(main);
+    dcl r fixed bin(15);
+    r = random(100);
+    put skip list('random 1-100:', r);
+end test14;

@@ -1,0 +1,11 @@
+test01: proc options(main);
+    dcl x fixed bin(15);
+    dcl y fixed bin(31);
+    dcl s char(10);
+    x = 42;
+    y = 100000;
+    s = 'hello';
+    put skip list('x=', x);
+    put skip list('y=', y);
+    put skip list('s=', s);
+end test01;

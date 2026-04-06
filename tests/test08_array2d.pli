@@ -1,0 +1,9 @@
+test08: proc options(main);
+    dcl mat(3,3) fixed bin(15);
+    mat(1,1) = 11;
+    mat(1,2) = 12;
+    mat(2,1) = 21;
+    put skip list('mat(1,1)=', mat(1,1));
+    put skip list('mat(1,2)=', mat(1,2));
+    put skip list('mat(2,1)=', mat(2,1));
+end test08;

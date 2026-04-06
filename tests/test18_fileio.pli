@@ -1,0 +1,11 @@
+test18: proc options(main);
+    dcl line char(80);
+    line = 'test file content';
+    open file('tmptest') output;
+    write file('tmptest') from(line);
+    close file('tmptest');
+    open file('tmptest') input;
+    read file('tmptest') into(line);
+    close file('tmptest');
+    put skip list('read back:', line);
+end test18;

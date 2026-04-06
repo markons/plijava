@@ -1,0 +1,23 @@
+# Compiled Java
+*.class
+
+# Generated Java output from transpiler (root-level only)
+/*.java
+/*.java.orig
+
+# PLY parser cache
+parsetab.py
+parser.out
+
+# Python cache
+__pycache__/
+*.pyc
+
+# IDE / editor
+.idea/
+.vscode/
+.claude/
+
+# Temp runtime files
+infile.txt
+ofile.txt
