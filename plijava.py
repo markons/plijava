@@ -1364,20 +1364,26 @@ def p_sql_statement(p):
     pl1_var = p[5]
     var_type = get_variable_type(pl1_var, all_dcls) 
     print('var_type:', pl1_var, var_type, flush=True)
-    add_to_result = "" 
+    add_to_result = ""
     if var_type == "int":
-       add_to_result = "Integer.parseInt(result);\n" 
+       add_to_result = "Integer.parseInt(result);"
+    elif var_type == "long":
+        add_to_result = "Long.parseLong(result);"
     else:
-        if var_type == "long": 
-            add_to_result = " Long.parseLong(result);\n" 
-        else:  
-            add_to_result = "result;\n" # only int, long, String types are supported
-       
+        add_to_result = "result;" # only int, long, String types are supported
+
+    # For numeric types wrap the parse in an error guard so a DB error string
+    # (starts with "E:") does not cause a NumberFormatException at runtime.
+    if var_type in ("int", "long"):
+        assign_stmt = f'if (!result.startsWith("E:")) {{ {pl1_var} = {add_to_result} }} else {{ System.err.println("SQL Error: " + result); }}'
+    else:
+        assign_stmt = f'{pl1_var} = {add_to_result}'
+
     # Read SQL credentials from a text file. Generated Java will read an env-var
     # `PLIJAVA_CREDS_FILE` if set; otherwise falls back to c:/temp/creds.txt
     p[0] = f'''
         filePath = System.getenv("PLIJAVA_CREDS_FILE") != null ? System.getenv("PLIJAVA_CREDS_FILE") : "c:/temp/creds.txt"; // Path to the credentials file
-        sql_statement =  "{sql_query}"; // SQL statement to be executed       
+        sql_statement =  "{sql_query}"; // SQL statement to be executed
         credentials = PliJavaRuntime.parseCredentials(filePath);
         dbsys = credentials.get("dbsys");
         jdbc_path = credentials.get("jdbc_path");
@@ -1386,17 +1392,16 @@ def p_sql_statement(p):
         user = credentials.get("user");
         password = credentials.get("password");
         dbName = credentials.get("database");
-                
+
         dbsys = dbsys.replace('\"', ' ').trim();
         jdbc_path = jdbc_path.replace('\"', ' ').trim();
         port = port.replace('\"', ' ').trim();
         host = host.replace('\"', ' ').trim();
         user = user.replace('\"', ' ').trim();
-        password = password.replace('\"', ' ').trim(); 
+        password = password.replace('\"', ' ').trim();
         dbName = dbName.replace('\"', ' ').trim();
         result = PliJavaRuntime.executeQuery(dbsys, jdbc_path, port, sql_statement, host, dbName, user, password);
-        //System.out.println("PL1var:" + {pl1_var} + ":" + "{var_type}");
-        {pl1_var} = {add_to_result};
+        {assign_stmt}
                      '''
 #{pl1_var}  = ((Number) result1).longValue();               
 def p_pl1_var(p):
