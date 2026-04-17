@@ -1,132 +1,106 @@
 # plijava
-Conversion of PL/I code into similar Java code.
-It is a fork of my ***plithon*** PL/I to Python project.
 
-***Important:*** this work is primarily the intermediate result of a learning process.
-It is not intended to be the full realisation of the work shown in the title.
-It contains errors which I am trying to correct. It is not complete, but will be expanded.
+PLIJAVA is a lightweight PL/I → Java transpiler and runner. It uses PLY (Python Lex-Yacc) to parse a useful subset of PL/I, emits Java source, optionally formats and compiles the generated code with `javac`, and can execute the resulting class. The project is a proof-of-concept and learning tool rather than a full PL/I implementation.
 
-plijava is a lightweight PL/I → Java transpiler and runtime helper. It parses a subset of PL/I source code, generates equivalent Java source, optionally compiles it with `javac`, and can run the resulting class. The project is intended as a practical proof-of-concept and learning tool for converting simple PL/I programs to Java.
-
-This repository contains:
-- `plijava.py` — main transpiler (lexer, parser, code generator, runner)
-- `pl1code/` — example PL/I input files used as test cases
-- `javalib/` — Java runtime helpers (DriverShim, PliJavaRuntime, RndRuntime)
-- `run.py` — small non-interactive wrapper to run the transpiler
+This repository includes:
+- `plijava.py` — main transpiler (lexer, parser, code generator, and runner)
+- `pl1code/` — example PL/I programs used as tests
+- `javalib/` — precompiled Java runtime helpers (`DriverShim`, `PliJavaRuntime`, `RndRuntime`)
+- `run.py` — small wrapper for non-interactive runs
 - `requirements.txt` — Python dependencies
-- `tests/` — minimal pytest integration tests
+- `tests/` — pytest-based tests and example inputs
 
-Status: functional proof-of-concept. The tool supports a useful subset of PL/I but is not a complete PL/I translator. See the code and tests for specifics.
+**Quick summary**
+- Language: Python 3.x with PLY
+- Target: Java (requires JDK)
+- Primary intent: education / experimentation
 
 ## Features
-- Parse PL/I procedure definitions and declarations
-- Translate basic statements: assignments, arithmetic, `if`, `do` loops, `select/when`, `put`/`skip` output
-- One- and two-dimensional arrays (integer indexing)
-- Record-style declarations (basic support)
-- `exec sql "..." into var;` support for simple SQL-to-variable mapping (MySQL/DB2 via JDBC)
-- Generate helper classes for database access and random utilities
-- Optional automatic invocation of `javac` and `java` to compile/run generated code
 
-## Architecture
-
-1. `plijava.py` uses PLY (lex/yacc) to parse PL/I.
-2. The parser emits Java source strings.
-3. The script writes generated Java to `<classname>.java`, formats (optional), compiles with `javac`, and runs with `java`.
+- Parse PL/I `proc` programs and many common declarations (`dcl`, arrays, records)
+- Translate statements: assignments, arithmetic, `if`, `do` loops (`while` and from..to), `select/when`, `put skip list` (console output), `get list` (console input)
+- One- and two-dimensional arrays (integer indexing only)
+- Basic record (level) declaration support (generates simple Java fields/arrays)
+- `exec sql "..." into var;` — executes a SQL statement via `PliJavaRuntime` and assigns the first-row first-column result to a variable (supports MySQL and Db2 via JDBC)
+- Generates Java helper usage for random numbers (`RndRuntime`) and JDBC driver loading (`DriverShim`) via the `javalib` classpath
+- Optional formatting of generated Java with `astyle.exe` (skipped if not installed)
 
 ## Requirements
 
 - Python 3.8+
-- Java Development Kit (JDK) with `javac` and `java` available (or set `JAVA_HOME`)
-- Python dependencies (see `requirements.txt`): `ply` (and `pytest` for tests)
-- MySQL Java JDBC driver (for MySQL support) or IBM's JDBC driver (for Db2 Community Edition)
-- Optional: `astyle` open source Java formatter for beautified Java output
+- `ply` (install via `pip install -r requirements.txt`)
+- A Java Development Kit (JDK) — `javac` and `java` should be on `PATH` or `JAVA_HOME` set
+- JDBC driver(s) for database access when using `exec sql` (MySQL / Db2)
+- Optional: `astyle.exe` for Java formatting
 
-## Installation
+## How it works (high level)
 
-1. Clone or copy this repository into a working directory.
-2. (Recommended) Create and activate a Python virtual environment:
+1. `plijava.py` builds a PLY lexer and LALR(1) parser that walks PL/I source and emits Java source strings.
+2. The script writes the Java source to `<ClassName>.java`, optionally formats it with `astyle.exe`, then compiles with `javac` using a classpath that includes the `javalib` helpers.
+3. If compilation succeeds the produced class is executed with `java` and the program output is printed.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1   # PowerShell on Windows
-```
+## Running the transpiler
 
-3. Install Python dependencies:
-
-```powershell
-pip install -r requirements.txt
-```
-
-4. Ensure a JDK is installed and either:
-   - set `JAVA_HOME` (recommended), or
-   - have `javac`/`java` on your `PATH`.
-
-### How to run
-- Tested only under Windows 11
-- Call the program: `python plijava.py`
-- Select your PL/I input file in the explorer window
-- If you want to include SQL statements, store your credentials in `c:/temp/creds.txt`
-  (location can be overridden with `PLIJAVA_CREDS_FILE`).
-
-## Usage
-
-Interactive (file dialog):
+- Interactive (file dialog):
 
 ```powershell
 python plijava.py
 ```
 
-Non-interactive (useful for CI or scripts):
+- Non-interactive (useful for scripts / CI): set `PLIJAVA_INPUT_FILE` or use `run.py`:
 
 ```powershell
 python run.py --input pl1code/simple.pli
 ```
 
-Environment variables supported:
-- `PLIJAVA_INPUT_FILE` — path to PL/I input file
+## Environment variables
+
+- `PLIJAVA_INPUT_FILE` — path to PL/I file to transpile (skips file dialog)
 - `PLIJAVA_CREDS_FILE` — path to credentials file for SQL operations (falls back to `c:/temp/creds.txt`)
 - `PLIJAVA_DEBUG` — set to `1` or `true` to enable debug logging
-- `JAVA_HOME` / `JDK_HOME` — used to locate `javac`/`java` if not on `PATH`
+- `JAVA_HOME` / `JDK_HOME` — used to resolve `javac`/`java` if not on `PATH`
 
-Credentials file format (single record):
+## Credentials file format (for `exec sql`)
+
+The runtime will read credentials via `PliJavaRuntime.parseCredentials()` from the file at `PLIJAVA_CREDS_FILE` or `c:/temp/creds.txt` by default. The expected format is a single comma-separated record, for example:
 
 ```
 host="localhost", user="root", password="secret", database="sakila", dbsys="mysql", jdbc_path="C:/path/to/mysql-connector.jar", port="3306"
 ```
 
-## Running tests
+## Known limitations and bugs
+
+This project is a work-in-progress. Selected limitations recorded in `plijava.py` include:
+
+- Grammar conflicts (reduce/reduce) in some declaration/expression rules — may mis-parse edge cases
+- Some token/regex issues in the lexer (dead/duplicate token definitions)
+- `substr`/string handling edge cases in generated Java (single-argument `substr` fixed to `substring(start)`)
+- SQL support returns only the first column of the first row; multi-row/multi-column queries are not supported
+- `get list()` type inference relies on prior declarations and may fail if `dcl` appears later
+- No support for PL/I ON conditions, PICTURE, BASED/POINTER, ENTRY declarations, or BY in DO FROM/TO
+
+See the top-of-file comments in `plijava.py` for a fuller list of known issues and version notes.
+
+## Tests
+
+Run the test suite with:
 
 ```powershell
 pytest -q
 ```
 
-Tests exercise that `plijava.py` runs and, if `javac` is present, attempt to compile generated Java.
+Tests exercise parsing and, when `javac` is available, attempt to compile generated Java code.
 
-## Version history
+## Development notes
 
-### Version 1.00
--  `dcl variable-name <fixed bin(15|31) | char(length)>;`
--  `variable = <arithmetic-expression> | <string-expression>;`
--  operators in arithmetic_expression: `+ - * / ( )`
--  operators in string-expression: builtins: `substr index decimal`
--  `if relational-expression then statement else statement;`
--  `select(expression) when(value) statement; other statement; end;`
--  `put skip list(variable | constant);`
--  one-dimensional arrays (only integer indexing)
--  record i/o simple version (open close read write)
--  do-while loop
-
-### Version 1.01
--  `exec sql "select sql-select-field" into variable;` — MySQL and Db2 connection
--  `get list(variable-list);` — read variables from console per prompt
-
-## Development notes & limitations
-
-- The transpiler implements a useful subset of PL/I; many features are not supported or are partially supported (see code comments).
-- Developed primarily on Windows; path handling is Windows-oriented.
-- `parsetab.py` is generated by PLY; regenerate it only when grammar changes.
-- Avoid committing real credentials — use `PLIJAVA_CREDS_FILE` to point to a local file outside the repo.
+- The Java helper classes reside in `javalib/` and must be available on the classpath when compiling/executing generated code.
+- `plijava.py` uses `tkinter` for the interactive file picker; non-interactive runs should set `PLIJAVA_INPUT_FILE`.
+- Logging is controlled through `PLIJAVA_DEBUG` — set to `1` to enable detailed debug output.
 
 ## License
 
-This repository is provided as-is for educational and experimental use.
+Provided as-is for educational and experimental use.
+
+---
+
+File generated/updated from `plijava.py` on update.
