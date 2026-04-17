@@ -169,6 +169,14 @@ dt = datetime.now()
 ts = datetime.timestamp(dt)
 logger.info('start at: %s', dt)
 
+# Feature usage flags (set by parser actions)
+uses_sql = False
+uses_random = False
+uses_scanner = False
+uses_fileio = False
+uses_map = False
+uses_urlclassloader = False
+
 # List of token names
 tokens = (
     'ID', 'INDEXED_ID', 'NUMBER', 'CHAR_CONST', 'ASSIGN',
@@ -300,23 +308,61 @@ def t_FILENAME(t):
 
 
 
-# Java imports
-java_imports = ('import java.io.FileNotFoundException;\n' +                 
-                 'import java.io.BufferedReader;\n' +                 
-                 'import java.io.FileReader;\n' +
-                 'import java.io.IOException;\n' +
-                 'import java.sql.*;\n' +
-                 'import java.util.HashMap;\n' +
-                 'import java.util.*;\n' + 
-                 'import java.util.Map;\n' +
-                 'import java.sql.DriverManager;\n' +                 
-                 'import java.util.logging.Logger;\n' +
-                 'import java.net.MalformedURLException;\n' +
-                 'import java.net.URL;\n' + 
-                 'import java.util.Scanner;\n' +
-                 'import java.net.URLClassLoader;\n' +
-                 'import java.util.Random;'
-                 )
+def build_imports_and_globals():
+    """Return (imports, globals) strings based on which features are used."""
+    imports = []
+    globals_code = []
+
+    # Common exceptions/needs used in main signature
+    imports.append('import java.io.FileNotFoundException;')
+    imports.append('import java.io.IOException;')
+
+    if uses_fileio:
+        imports.append('import java.io.BufferedReader;')
+        imports.append('import java.io.FileReader;')
+        imports.append('import java.io.PrintWriter;')
+
+    if uses_sql:
+        imports.append('import java.sql.*;')
+        imports.append('import java.net.MalformedURLException;')
+
+    if uses_map or uses_sql:
+        imports.append('import java.util.Map;')
+        imports.append('import java.util.HashMap;')
+
+    if uses_scanner:
+        imports.append('import java.util.Scanner;')
+
+    if uses_random:
+        imports.append('import java.util.Random;')
+
+    if uses_urlclassloader:
+        imports.append('import java.net.URL;')
+        imports.append('import java.net.URLClassLoader;')
+
+    # Build globals only for features actually used
+    if uses_sql:
+        globals_code.append('String dbsys = "";')
+        globals_code.append('String jdbc_path = "";')
+        globals_code.append('String port = "";')
+        globals_code.append('String host = "";')
+        globals_code.append('String user = "";')
+        globals_code.append('String password = "";')
+        globals_code.append('String dbName = "";')
+        globals_code.append('String sql_statement = "";')
+        globals_code.append('String result = "";')
+        globals_code.append('Map<String, String> credentials;')
+
+    if uses_scanner:
+        globals_code.append('Scanner scanner = new Scanner(System.in);')
+
+    if globals_code:
+        globals_block = '\n                 // ---- generated runtime variables -------------------------\n                 ' + '\n                 '.join(globals_code) + '\n                 // ---- end generated variables ---------------------------------\n'
+    else:
+        globals_block = ''
+
+    imports_str = '\n'.join(imports)
+    return imports_str, globals_block
 
 # RndRuntime and DriverShim are now in javalib/RndRuntime.java and
 # javalib/DriverShim.java — compiled once, referenced via classpath.
@@ -441,12 +487,18 @@ def p_program(p):
     all_procs = internal_procs + (external_procs or [])
     internal_code = "\n".join(all_procs)
 
-    # Final class structure
+    # Final class structure: include helper classes only when used
+    tail = ""
+    if drivershim_class and (uses_sql or uses_urlclassloader):
+        tail += drivershim_class + "\n"
+    if random_class and uses_random:
+        tail += random_class + "\n"
+
+    # Final class
     p[0] = (
         f"{main_code}\n"
         f"{internal_code}\n"
-        f"{drivershim_class}\n"
-        f"{random_class}\n"
+        f"{tail}"
         f"}} //end class {procedure_name}\n"
     )
 
@@ -467,12 +519,19 @@ def p_external_proc_list(p):
 def p_procedure_header(p):
     '''procedure_header : ID COLON PROC OPTIONS LPAREN MAIN RPAREN SEMICOLON'''
     logger.debug('in procedure_header: p values: %s', p[:])
+    # Compose imports and runtime globals based on features used during parsing
+    imports_str, globals_block = build_imports_and_globals()
     p[0] = ""
-    p[0] = p[0] + java_imports + "\n"
-    p[0] = p[0] + f"public class {p[1]} {{ \n"       
-    p[0] = p[0] + sql_methods + "\n" + read_creds + "\n"
-    p[0] = p[0] + f"public static void main(String[] args) throws FileNotFoundException, IOException, MalformedURLException, ClassNotFoundException, InstantiationException, IllegalAccessException {{"
-    p[0] = p[0] + global_strings + "\n";
+    if imports_str:
+        p[0] += imports_str + "\n"
+    p[0] += f"public class {p[1]} {{ \n"
+    if sql_methods:
+        p[0] += sql_methods + "\n"
+    if read_creds:
+        p[0] += read_creds + "\n"
+    p[0] += f"public static void main(String[] args) throws FileNotFoundException, IOException, ClassNotFoundException, InstantiationException, IllegalAccessException {{"
+    if globals_block:
+        p[0] += globals_block + "\n"
     
     logger.debug('end procedure_header result: p values: %s', p[:])    
     
@@ -1005,6 +1064,8 @@ def p_expression_random(p):
                   | RANDOM LPAREN expression RPAREN
                   | RANDOM LPAREN expression COMMA expression RPAREN'''
     logger.debug('in random: p values: %s', p[:])              
+    global uses_random
+    uses_random = True
     if len(p) == 4:  # RANDOM()
         p[0] = "RndRuntime.random(100)"
     elif len(p) == 5:  # RANDOM(bound)
@@ -1089,6 +1150,8 @@ def p_put_statement(p):
     
 def p_get_list_statement(p):
     '''get_list_statement : GET LIST LPAREN id_list RPAREN SEMICOLON'''
+    global uses_scanner
+    uses_scanner = True
     var_names = p[4]  # List of variable names (assumed to be a list of strings)
 
     # Improved Java code generation with type handling and error checking
@@ -1303,6 +1366,8 @@ def p_open_file(p):
                  | OPEN FILE LPAREN CHAR_CONST RPAREN OUTPUT SEMICOLON'''   
     # '''open_file : OPEN FILE LPAREN CHAR_CONST RPAREN MODE SEMICOLON'''
     print('in open_file:', f"p[:] values: {p[:]} (len: {len(p)})", flush=True)
+    global uses_fileio
+    uses_fileio = True
 
     mode = p[6].lower()
     fname = p[4].replace('"', "")
@@ -1320,6 +1385,8 @@ def p_open_file(p):
 def p_read_file(p):
     '''read_file : READ FILE LPAREN CHAR_CONST RPAREN INTO LPAREN ID RPAREN SEMICOLON'''
     print('in read:', f"p[:] values: {p[:]}", flush=True)
+    global uses_fileio
+    uses_fileio = True
     fname = p[4].replace('"', "")
     var_name = p[8]
     p[0] = f"{var_name} = br_{fname}.readLine();"
@@ -1327,6 +1394,8 @@ def p_read_file(p):
 def p_write_file(p):
     '''write_file : WRITE FILE LPAREN CHAR_CONST RPAREN FROM LPAREN ID RPAREN SEMICOLON'''
     print('in write:', f"p[:] values: {p[:]}", flush=True)
+    global uses_fileio
+    uses_fileio = True
     fname = p[4].replace('"', "")
     var_name = p[8]
     p[0] = f"br_{fname}.println({var_name});"
@@ -1334,6 +1403,8 @@ def p_write_file(p):
 def p_close_file(p):
     '''close_file : CLOSE FILE LPAREN CHAR_CONST RPAREN SEMICOLON'''
     print('in close:', f"p[:] values: {p[:]}", flush=True)
+    global uses_fileio
+    uses_fileio = True
     fname = p[4].replace('"', "")
     p[0] = f"br_{fname}.close();\n"  
            
@@ -1360,6 +1431,11 @@ def p_sql_statement(p):
     'sql_statement : EXEC SQL STRING INTO ID SEMICOLON'
     # print('in sql_statement:', f"p[:] values: {p[:]}", flush=True)
         
+    global uses_sql, uses_map, uses_urlclassloader
+    uses_sql = True
+    uses_map = True
+    uses_urlclassloader = True
+
     sql_query = p[3].strip('"')
     pl1_var = p[5]
     var_type = get_variable_type(pl1_var, all_dcls) 
