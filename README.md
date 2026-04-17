@@ -119,6 +119,18 @@ Tests exercise parsing and, when `javac` is available, attempt to compile genera
 - `plijava.py` uses `tkinter` for the interactive file picker; non-interactive runs should set `PLIJAVA_INPUT_FILE`.
 - Logging is controlled through `PLIJAVA_DEBUG` — set to `1` to enable detailed debug output.
 
+## Side-by-side viewer
+
+A simple GUI tool is included to compare the original PL/I source and the generated Java code visually:
+
+- `show_side_by_side.py` — run it with `--pli` and `--java` paths, or open files from the GUI.
+
+Example:
+
+```powershell
+python show_side_by_side.py --pli pl1code/simple.pli --java MyProgram.java
+```
+
 ## License
 
 Provided as-is for educational and experimental use.
