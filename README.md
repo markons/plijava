@@ -25,6 +25,28 @@ This repository includes:
 - Generates Java helper usage for random numbers (`RndRuntime`) and JDBC driver loading (`DriverShim`) via the `javalib` classpath
 - Optional formatting of generated Java with `astyle.exe` (skipped if not installed)
 
+## Implemented PL/I features
+
+The following PL/I constructs are implemented (as observed in `plijava.py`) and translated into Java by the transpiler:
+
+- Program structure: `name: proc options(main); ... end name;`
+- Declarations: `dcl var fixed bin(n)` (int/long), `dcl var char(n)`, 1-D and 2-D arrays, and simple record (level) declarations
+- Assignments: `var = expression;`
+- Conditionals: `if <relational> then <stmt> else <stmt>;` (supports `do; ... end;` blocks)
+- Selection: `select(expr); when(value) stmt; other stmt; end;` (translates to Java `if/else if/else` style)
+- Loops: `do while(cond); ... end;` and counted loops `do i = start to end; ... end;`
+- Blocked `do ... end` groups (treated as braced blocks in generated Java)
+- Console I/O: `put skip list(...)` → `System.out.println(...)`; `get list(var, ...)` → `Scanner` reads with type handling
+- Function/procedure support: `name: proc(params) returns(type);` and `name: proc(params);` — parameter type inference from `dcl`; pass-by-reference emulated via single-element arrays
+- Calls: `call subname(args);` — call-site transformation wraps arguments for reference semantics as needed
+- Returns: `return(expr);` for returning values from functions
+- Built-ins: `substr`, `index`, `decimal`, `mod`, `random`, string concatenation (`||`) — mapped to Java `substring`, `indexOf+1`, `String.valueOf`, `%`, `RndRuntime`, and `+` respectively
+- File I/O: `open file('name') input|output;`, `read file('name') into(var);`, `write file('name') from(var);`, `close file('name');` — mapped to Java I/O (`BufferedReader`, `PrintWriter`)
+- SQL: `exec sql "..." into var;` — runtime uses `PliJavaRuntime` to parse credentials and execute a JDBC query, assigning the first-column result
+- Runtime helpers: integration with `javalib` classes (`DriverShim`, `PliJavaRuntime`, `RndRuntime`) for JDBC/random utilities
+
+Refer to `plijava.py` top comments and parser rules for more details and edge-cases.
+
 ## Requirements
 
 - Python 3.8+
