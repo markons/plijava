@@ -20,9 +20,10 @@ tkinter.Tk = _MockTk
 tkinter.filedialog.askopenfilename = lambda **kwargs: pli_file
 
 # --- run plijava from its own directory so javac output lands there ---
-os.chdir(r'F:\plijava')
+_here = os.path.dirname(os.path.abspath(__file__))
+os.chdir(_here)
 
-with open(r'F:\plijava\plijava.py', 'r', encoding='utf-8') as f:
+with open(os.path.join(_here, 'plijava.py'), 'r', encoding='utf-8') as f:
     src = f.read()
 
 exec(compile(src, 'plijava.py', 'exec'), {'__name__': '__main__', '__file__': 'plijava.py'})

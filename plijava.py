@@ -131,6 +131,14 @@
 --------------------------------------------------------------------------------
  VERSION HISTORY
 --------------------------------------------------------------------------------
+  v1.04  2026-04-19  Fix plijava_wrapper.py: removed hard-coded F:\plijava paths,
+                     now resolves the wrapper's own directory at runtime so the
+                     correct plijava.py is always used and javac errors reference
+                     the real project path.
+                     Fix file I/O: use separate in_<name>/out_<name> handles for
+                     input (BufferedReader) and output (PrintWriter) so the same
+                     file can be opened for output then input without a variable
+                     redeclaration error.
   v1.03  2025-04-06  Internal procedures, DO FROM/TO, RANDOM, record dcl,
                      array/function-call disambiguation, RndRuntime class,
                      javac path fix, JDK path updated to Semeru JDK 26,
@@ -176,6 +184,7 @@ uses_scanner = False
 uses_fileio = False
 uses_map = False
 uses_urlclassloader = False
+file_open_modes = {}  # fname -> 'input'|'output', tracks last open mode for close
 
 # List of token names
 tokens = (
@@ -262,7 +271,21 @@ reserved = {
     'return': 'RETURN',
 }
 
-# Disable print  
+JAVA_RESERVED = {
+    'abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catch', 'char',
+    'class', 'const', 'continue', 'default', 'do', 'double', 'else', 'enum',
+    'extends', 'final', 'finally', 'float', 'for', 'goto', 'if', 'implements',
+    'import', 'instanceof', 'int', 'interface', 'long', 'native', 'new',
+    'package', 'private', 'protected', 'public', 'return', 'short', 'static',
+    'strictfp', 'super', 'switch', 'synchronized', 'this', 'throw', 'throws',
+    'transient', 'try', 'void', 'volatile', 'while',
+}
+
+def safe_java_id(name):
+    """Append underscore if name collides with a Java reserved word."""
+    return name + '_' if name.lower() in JAVA_RESERVED else name
+
+# Disable print
 def blockPrint():
     sys.stdout = open(os.devnull, 'w')
 
@@ -313,11 +336,9 @@ def build_imports_and_globals():
     imports = []
     globals_code = []
 
-    # Common exceptions/needs used in main signature
-    imports.append('import java.io.FileNotFoundException;')
-    imports.append('import java.io.IOException;')
-
     if uses_fileio:
+        imports.append('import java.io.FileNotFoundException;')
+        imports.append('import java.io.IOException;')
         imports.append('import java.io.BufferedReader;')
         imports.append('import java.io.FileReader;')
         imports.append('import java.io.PrintWriter;')
@@ -325,6 +346,8 @@ def build_imports_and_globals():
     if uses_sql:
         imports.append('import java.sql.*;')
         imports.append('import java.net.MalformedURLException;')
+        if not uses_fileio:
+            imports.append('import java.io.IOException;')
 
     if uses_map or uses_sql:
         imports.append('import java.util.Map;')
@@ -351,6 +374,7 @@ def build_imports_and_globals():
         globals_code.append('String dbName = "";')
         globals_code.append('String sql_statement = "";')
         globals_code.append('String result = "";')
+        globals_code.append('String filePath = "";')
         globals_code.append('Map<String, String> credentials;')
 
     if uses_scanner:
@@ -480,8 +504,25 @@ def p_program(p):
     # Collect external procedures (defined after END mainprog;)
     external_procs = p[7] if len(p) == 8 else []
 
+    # All feature flags are now set — resolve sentinels in the header
+    imports_str, globals_block = build_imports_and_globals()
+    throws_list = []
+    if uses_fileio:
+        throws_list += ['FileNotFoundException', 'IOException']
+    if uses_sql:
+        if 'IOException' not in throws_list:
+            throws_list.append('IOException')
+        throws_list.append('MalformedURLException')
+    throws_clause = f" throws {', '.join(throws_list)}" if throws_list else ""
+    header = p[1]
+    header = header.replace('%%IMPORTS%%', imports_str + "\n" if imports_str else "")
+    header = header.replace('%%SQLMETHODS%%', sql_methods + "\n" if sql_methods else "")
+    header = header.replace('%%READCREDS%%', read_creds + "\n" if read_creds else "")
+    header = header.replace('%%THROWS%%', throws_clause)
+    header = header.replace('%%GLOBALS%%', globals_block + "\n" if globals_block else "")
+
     # Generate main procedure code
-    main_code = f"{p[1]}\n{declarations}\n{statements}\n}}"
+    main_code = f"{header}\n{declarations}\n{statements}\n}}"
 
     # Add all procedures (internal + external) to the output
     all_procs = internal_procs + (external_procs or [])
@@ -519,20 +560,9 @@ def p_external_proc_list(p):
 def p_procedure_header(p):
     '''procedure_header : ID COLON PROC OPTIONS LPAREN MAIN RPAREN SEMICOLON'''
     logger.debug('in procedure_header: p values: %s', p[:])
-    # Compose imports and runtime globals based on features used during parsing
-    imports_str, globals_block = build_imports_and_globals()
-    p[0] = ""
-    if imports_str:
-        p[0] += imports_str + "\n"
-    p[0] += f"public class {p[1]} {{ \n"
-    if sql_methods:
-        p[0] += sql_methods + "\n"
-    if read_creds:
-        p[0] += read_creds + "\n"
-    p[0] += f"public static void main(String[] args) throws FileNotFoundException, IOException, ClassNotFoundException, InstantiationException, IllegalAccessException {{"
-    if globals_block:
-        p[0] += globals_block + "\n"
-    
+    # Use sentinels — features flags are not fully set yet (body not parsed).
+    # p_program will replace these after full parsing.
+    p[0] = f"%%IMPORTS%%public class {p[1]} {{ \n%%SQLMETHODS%%%%READCREDS%%public static void main(String[] args)%%THROWS%% {{%%GLOBALS%%"
     logger.debug('end procedure_header result: p values: %s', p[:])    
     
 def p_proc_statement(p):
@@ -606,22 +636,23 @@ def p_proc_header(p):
 
     param_names = []  # List of parameter names
 
+    method_name = safe_java_id(p[1])
     if len(p) == 12:  # With parameters and RETURNS
         java_parameters = convert_to_java_parameters(p[5])
         java_return_type = pli_type_to_java(p[9])
-        header_str = f"public static {java_return_type} {p[1]}({java_parameters}) {{"
+        header_str = f"public static {java_return_type} {method_name}({java_parameters}) {{"
         # Extract parameter names from p[5]
         param_names = [param.strip() for param in p[5].split(',')]
     elif len(p) == 11:  # No parameters but with RETURNS
         java_return_type = pli_type_to_java(p[8])
-        header_str = f"public static {java_return_type} {p[1]}() {{"
+        header_str = f"public static {java_return_type} {method_name}() {{"
     elif len(p) == 8:  # With parameters, no RETURNS
         java_parameters = convert_to_java_parameters(p[5])
-        header_str = f"public static void {p[1]}({java_parameters}) {{"
+        header_str = f"public static void {method_name}({java_parameters}) {{"
         # Extract parameter names from p[5]
         param_names = [param.strip() for param in p[5].split(',')]
     else:  # No parameters, no RETURNS
-        header_str = f"public static void {p[1]}() {{"
+        header_str = f"public static void {method_name}() {{"
 
     # Return tuple of (header_string, param_names_list)
     p[0] = (header_str, param_names)
@@ -701,18 +732,14 @@ def p_variable_access(p):
 
     if len(p) == 7:  # Two-dimensional access
         if is_array:
-            # Array access - use brackets
             p[0] = f"{p[1]}[{p[3]}][{p[5]}]"
         else:
-            # Function call with two arguments - use parentheses
-            p[0] = f"{p[1]}({p[3]}, {p[5]})"
+            p[0] = f"{safe_java_id(p[1])}({p[3]}, {p[5]})"
     elif len(p) == 5:  # One-dimensional access
         if is_array:
-            # Array access - use brackets
             p[0] = f"{p[1]}[{p[3]}]"
         else:
-            # Function call with one argument - use parentheses
-            p[0] = f"{p[1]}({p[3]})"
+            p[0] = f"{safe_java_id(p[1])}({p[3]})"
     else:
         p[0] = p[1]
     logger.debug('end variable_access: %s', p[0])      
@@ -953,10 +980,10 @@ def p_call_statement(p):
                       | CALL ID LPAREN RPAREN SEMICOLON'''
     logger.debug('in call_statement: p values: %s', p[:])
     if len(p) == 6:  # Without parameters
-        p[0] = f"{p[2]}();"
+        p[0] = f"{safe_java_id(p[2])}();"
         return
 
-    proc_name = p[2]
+    proc_name = safe_java_id(p[2])
     args = [a.strip() for a in p[4].split(',')]
 
     # Pass-by-reference: wrap each argument in a type[] array, copy back after call
@@ -1032,10 +1059,11 @@ def p_expression_function_call(p):
     '''expression : ID LPAREN parameter_list RPAREN
                   | ID LPAREN RPAREN'''
     logger.debug('in expression_function_call: p values: %s', p[:])
+    fn = safe_java_id(p[1])
     if len(p) == 5:  # Function call with arguments
-        p[0] = f"{p[1]}({p[3]})"
+        p[0] = f"{fn}({p[3]})"
     else:  # Function call without arguments
-        p[0] = f"{p[1]}()"
+        p[0] = f"{fn}()"
     logger.debug('end expression_function_call: %s', p[0])
 
 def p_expression_substr(p):
@@ -1369,15 +1397,17 @@ def p_open_file(p):
     global uses_fileio
     uses_fileio = True
 
+    global file_open_modes
     mode = p[6].lower()
     fname = p[4].replace('"', "")
+    file_open_modes[fname] = mode
 
     if mode == "input":
-        p[0] = f"java.io.FileReader fileReader_{fname} = new java.io.FileReader(\"{fname}.txt\");\n" \
-               f"java.io.BufferedReader br_{fname} = new java.io.BufferedReader(fileReader_{fname});"
+        p[0] = (f"java.io.FileReader fileReader_{fname} = new java.io.FileReader(\"{fname}.txt\");\n"
+                f"java.io.BufferedReader in_{fname} = new java.io.BufferedReader(fileReader_{fname});")
     elif mode == "output":
-        p[0] = f"java.io.FileWriter fileWriter_{fname} = new java.io.FileWriter(\"{fname}.txt\");\n" \
-               f"java.io.PrintWriter br_{fname} = new java.io.PrintWriter(fileWriter_{fname});"
+        p[0] = (f"java.io.FileWriter fileWriter_{fname} = new java.io.FileWriter(\"{fname}.txt\");\n"
+                f"java.io.PrintWriter out_{fname} = new java.io.PrintWriter(fileWriter_{fname});")
     else:
         print(f"Unsupported file mode: {mode}")
         p[0] = ""
@@ -1389,7 +1419,7 @@ def p_read_file(p):
     uses_fileio = True
     fname = p[4].replace('"', "")
     var_name = p[8]
-    p[0] = f"{var_name} = br_{fname}.readLine();"
+    p[0] = f"{var_name} = in_{fname}.readLine();"
 
 def p_write_file(p):
     '''write_file : WRITE FILE LPAREN CHAR_CONST RPAREN FROM LPAREN ID RPAREN SEMICOLON'''
@@ -1398,7 +1428,7 @@ def p_write_file(p):
     uses_fileio = True
     fname = p[4].replace('"', "")
     var_name = p[8]
-    p[0] = f"br_{fname}.println({var_name});"
+    p[0] = f"out_{fname}.println({var_name});"
 
 def p_close_file(p):
     '''close_file : CLOSE FILE LPAREN CHAR_CONST RPAREN SEMICOLON'''
@@ -1406,7 +1436,9 @@ def p_close_file(p):
     global uses_fileio
     uses_fileio = True
     fname = p[4].replace('"', "")
-    p[0] = f"br_{fname}.close();\n"  
+    mode = file_open_modes.get(fname, 'input')
+    handle = f"out_{fname}" if mode == "output" else f"in_{fname}"
+    p[0] = f"{handle}.close();"
            
 
 #Some global variables for database access    
@@ -1662,6 +1694,13 @@ def execute_transpiler(java_code, class_name):
     if not os.path.exists(javac_path):
         javac_path = shutil.which("javac")
     classpath = f'.{os.pathsep}{JAVALIB_DIR}'
+    if uses_sql:
+        db2jar = os.path.join(JAVALIB_DIR, 'db2jcc4.jar')
+        classpath = f'{classpath}{os.pathsep}{db2jar}'
+        drivershim_class = os.path.join(JAVALIB_DIR, 'DriverShim.class')
+        drivershim_src = os.path.join(JAVALIB_DIR, 'DriverShim.java')
+        if not os.path.exists(drivershim_class):
+            subprocess.run([javac_path, '-cp', classpath, '-d', JAVALIB_DIR, drivershim_src], check=True)
     compile_process = subprocess.run([javac_path, '-cp', classpath, file_with_path], capture_output=True, text=True)
     if compile_process.returncode != 0:
         print("Compilation failed:", compile_process.stderr)

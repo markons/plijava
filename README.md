@@ -1,12 +1,14 @@
-# plijava
+# plijava — v1.04
 
 PLIJAVA is a lightweight PL/I → Java transpiler and runner. It uses PLY (Python Lex-Yacc) to parse a useful subset of PL/I, emits Java source, optionally formats and compiles the generated code with `javac`, and can execute the resulting class. The project is a proof-of-concept and learning tool rather than a full PL/I implementation.
 
 This repository includes:
 - `plijava.py` — main transpiler (lexer, parser, code generator, and runner)
+- `plijava_wrapper.py` — non-interactive wrapper (used by the test runner)
 - `pl1code/` — example PL/I programs used as tests
 - `javalib/` — precompiled Java runtime helpers (`DriverShim`, `PliJavaRuntime`, `RndRuntime`)
-- `run.py` — small wrapper for non-interactive runs
+- `run_tests.py` — test runner; produces a Word report in `c:/temp/`
+- `show_side_by_side.py` — GUI side-by-side PL/I → Java viewer
 - `requirements.txt` — Python dependencies
 - `tests/` — pytest-based tests and example inputs
 
@@ -69,10 +71,16 @@ Refer to `plijava.py` top comments and parser rules for more details and edge-ca
 python plijava.py
 ```
 
-- Non-interactive (useful for scripts / CI): set `PLIJAVA_INPUT_FILE` or use `run.py`:
+- Non-interactive via wrapper (used by the test runner):
 
 ```powershell
-python run.py --input pl1code/simple.pli
+python plijava_wrapper.py tests/test01_basic.pli
+```
+
+- Run the full test suite and produce a Word report:
+
+```powershell
+python run_tests.py
 ```
 
 ## Environment variables
@@ -102,6 +110,15 @@ This project is a work-in-progress. Selected limitations recorded in `plijava.py
 - No support for PL/I ON conditions, PICTURE, BASED/POINTER, ENTRY declarations, or BY in DO FROM/TO
 
 See the top-of-file comments in `plijava.py` for a fuller list of known issues and version notes.
+
+## Changelog
+
+| Version | Date | Summary |
+|---------|------|---------|
+| v1.04 | 2026-04-19 | Fix wrapper path (was hard-coded to `F:\plijava`); fix file I/O variable naming (`in_`/`out_` per handle type) so a file can be opened for output then re-opened for input without a Java redeclaration error |
+| v1.03 | 2025-04-06 | Internal procedures, DO FROM/TO, RANDOM, record dcl, array/function-call disambiguation, RndRuntime, optional astyle |
+| v1.02 | 2024 | GitHub baseline |
+| v1.01 | 2024-11-05 | Initial fork from plithon |
 
 ## Tests
 
@@ -137,4 +154,4 @@ Provided as-is for educational and experimental use.
 
 ---
 
-File generated/updated from `plijava.py` on update.
+v1.04 — 2026-04-19
