@@ -1,0 +1,10 @@
+test21: proc options(main);
+    dcl i fixed bin(15);
+    dcl m fixed bin(15);
+    i = 0;
+    do while(i < 6);
+        i = i + 1;
+        m = mod(i, 2);
+        if m = 0 then iterate; else put skip list('odd:', i);
+    end;
+end test21;

@@ -2,8 +2,6 @@ import java.io.*;
 import java.sql.*;
 import java.util.*;
 import java.net.*;
-import java.util.logging.Logger;
-
 /**
  * plijava runtime helper - database access and credential parsing.
  * Generated Java programs call PliJavaRuntime.executeQuery() and
@@ -24,11 +22,7 @@ public class PliJavaRuntime {
             String dbName,
             String user,
             String password)
-            throws
-            MalformedURLException,
-            ClassNotFoundException,
-            InstantiationException,
-            IllegalAccessException {
+            throws MalformedURLException {
 
         Connection connection = null;
         Statement statement = null;
@@ -63,7 +57,7 @@ public class PliJavaRuntime {
         u = new URL("jar:file:" + jdbc_path + "!/");
         try {
             URLClassLoader ucl = new URLClassLoader(new URL[]{u});
-            Driver d = (Driver) Class.forName(classname, true, ucl).newInstance();
+            Driver d = (Driver) Class.forName(classname, true, ucl).getDeclaredConstructor().newInstance();
             DriverManager.registerDriver(new DriverShim(d));
             String portv = ":" + port + "/";
             url.append(host).append(portv).append(dbName);
@@ -74,10 +68,10 @@ public class PliJavaRuntime {
             if (resultSet.next()) {
                 result = resultSet.getString(1);
             }
+        } catch (ReflectiveOperationException e) {
+            return "E:Driver load failed: " + e.getMessage();
         } catch (SQLException e) {
-            System.out.println("E:SQL Error");
-            e.printStackTrace();
-            return "E:Error connecting to database";
+            return "E:" + e.getMessage();
         } finally {
             try {
                 if (statement  != null) statement.close();

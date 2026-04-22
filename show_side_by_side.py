@@ -111,6 +111,10 @@ def main():
     parser.add_argument('--java', help='Generated Java file')
     args = parser.parse_args()
 
+    if not args.pli and not args.java:
+        parser.print_help()
+        print()
+
     app = SideBySideViewer(pli_path=args.pli, java_path=args.java)
     app.mainloop()
 

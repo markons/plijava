@@ -11,8 +11,8 @@ from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-WRAPPER  = r'F:\plijava\plijava_wrapper.py'
-TEST_DIR = r'F:\plijava\tests'
+WRAPPER  = r'c:\githubs\plijava\plijava_wrapper.py'
+TEST_DIR = r'c:\githubs\plijava\tests'
 PYTHON   = sys.executable
 TIMEOUT  = 60   # seconds per test
 
@@ -37,6 +37,17 @@ TESTS = [
     ('test17_voidproc.pli',   'Internal void procedure + call statement'),
     ('test18_fileio.pli',     'File I/O: open / write / read / close'),
     ('test19_doblock.pli',    'do;...end; block inside if-then-else'),
+    # ---- v2.00 features (Claude Code) ----
+    ('test20_leave.pli',         'LEAVE statement (break out of do-while)'),
+    ('test21_iterate.pli',       'ITERATE statement (continue in do-while)'),
+    ('test22_stop.pli',          'STOP statement -> System.exit(0)'),
+    ('test23_doby.pli',          'DO FROM/TO BY (positive and negative step)'),
+    ('test24_init.pli',          'DCL ... INIT(value) initializer'),
+    ('test25_bit.pli',           'BIT(1) type -> Java boolean'),
+    ('test26_strbuiltins.pli',   'String built-ins: length, trim, upper, lower, repeat, reverse'),
+    ('test27_mathbuiltins.pli',  'Math built-ins: abs, sqrt, ceil, floor, round, trunc, sign, max, min'),
+    ('test28_datetime.pli',      'date() and time() built-ins'),
+    ('test29_endfile.pli',       'ON ENDFILE handler with read loop'),
 ]
 
 # ── helpers ─────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-# plijava — v1.04
+# plijava — v2.00
 
 PLIJAVA is a lightweight PL/I → Java transpiler and runner. It uses PLY (Python Lex-Yacc) to parse a useful subset of PL/I, emits Java source, optionally formats and compiles the generated code with `javac`, and can execute the resulting class. The project is a proof-of-concept and learning tool rather than a full PL/I implementation.
 
@@ -43,6 +43,10 @@ The following PL/I constructs are implemented (as observed in `plijava.py`) and 
 - Calls: `call subname(args);` — call-site transformation wraps arguments for reference semantics as needed
 - Returns: `return(expr);` for returning values from functions
 - Built-ins: `substr`, `index`, `decimal`, `mod`, `random`, string concatenation (`||`) — mapped to Java `substring`, `indexOf+1`, `String.valueOf`, `%`, `RndRuntime`, and `+` respectively
+- **v2.00 built-ins** (Claude Code): `length`, `trim`, `lowercase`, `uppercase`, `repeat`, `reverse`, `abs`, `sqrt`, `ceil`, `floor`, `round`, `trunc`, `sign`, `max`, `min`, `date`, `time` — dispatched to the equivalent Java expression via a built-in table
+- **v2.00 control flow** (Claude Code): `leave` → `break`, `iterate` → `continue`, `stop` → `System.exit(0)`, `do ... by <step>` (positive or negative literal step)
+- **v2.00 declarations** (Claude Code): `dcl ... init(value)` initializer; `bit(n)` type mapped to Java `boolean` (init `'1'` → `true`)
+- **v2.00 ON ENDFILE handler** (Claude Code): `on endfile('fname') stmt;` registers a handler; subsequent `read file('fname') into(var);` is wrapped in a null-check that runs the handler on EOF
 - File I/O: `open file('name') input|output;`, `read file('name') into(var);`, `write file('name') from(var);`, `close file('name');` — mapped to Java I/O (`BufferedReader`, `PrintWriter`)
 - SQL: `exec sql "..." into var;` — runtime uses `PliJavaRuntime` to parse credentials and execute a JDBC query, assigning the first-column result
 - Runtime helpers: integration with `javalib` classes (`DriverShim`, `PliJavaRuntime`, `RndRuntime`) for JDBC/random utilities
@@ -107,7 +111,12 @@ This project is a work-in-progress. Selected limitations recorded in `plijava.py
 - `substr`/string handling edge cases in generated Java (single-argument `substr` fixed to `substring(start)`)
 - SQL support returns only the first column of the first row; multi-row/multi-column queries are not supported
 - `get list()` type inference relies on prior declarations and may fail if `dcl` appears later
-- No support for PL/I ON conditions, PICTURE, BASED/POINTER, ENTRY declarations, or BY in DO FROM/TO
+- No support for PICTURE, BASED/POINTER, or ENTRY declarations
+- ON conditions: only `ENDFILE` is implemented (v2.00); `ERROR`, `KEY`, `UNDEFINEDFILE` etc. are not supported
+- Every `if-then` requires an explicit `else` branch (use `else x = x;` as a no-op when needed)
+- No unary minus on literals — write `0 - 7` instead of `-7`
+- `put list(...)` elements must be variables, numbers or string literals — assign function-call results to a variable first
+- `write file('f') from(...)` requires an ID; assign string literals to a variable first
 
 See the top-of-file comments in `plijava.py` for a fuller list of known issues and version notes.
 
@@ -115,6 +124,7 @@ See the top-of-file comments in `plijava.py` for a fuller list of known issues a
 
 | Version | Date | Summary |
 |---------|------|---------|
+| v2.00 | 2026-04-22 | **Claude Code release.** Adds `LEAVE` / `ITERATE` / `STOP`, `BY` clause on `DO FROM/TO`, `INIT(value)` on `DCL`, `BIT(n)` → Java `boolean`, `ON ENDFILE` handlers, and 17 new built-in functions (`length`, `trim`, `lowercase`, `uppercase`, `repeat`, `reverse`, `abs`, `sqrt`, `ceil`, `floor`, `round`, `trunc`, `sign`, `max`, `min`, `date`, `time`). 10 new tests (test20–test29); full suite passes 29/29. |
 | v1.04 | 2026-04-19 | Fix wrapper path (was hard-coded to `F:\plijava`); fix file I/O variable naming (`in_`/`out_` per handle type) so a file can be opened for output then re-opened for input without a Java redeclaration error |
 | v1.03 | 2025-04-06 | Internal procedures, DO FROM/TO, RANDOM, record dcl, array/function-call disambiguation, RndRuntime, optional astyle |
 | v1.02 | 2024 | GitHub baseline |
@@ -154,4 +164,4 @@ Provided as-is for educational and experimental use.
 
 ---
 
-v1.04 — 2026-04-19
+v2.00 — 2026-04-22 (Claude Code)

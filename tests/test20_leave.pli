@@ -1,0 +1,9 @@
+test20: proc options(main);
+    dcl i fixed bin(15);
+    i = 1;
+    do while(i < 100);
+        put skip list('i=', i);
+        if i = 5 then leave; else i = i + 1;
+    end;
+    put skip list('done at:', i);
+end test20;

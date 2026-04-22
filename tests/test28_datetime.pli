@@ -1,0 +1,12 @@
+test28: proc options(main);
+    dcl d char(10);
+    dcl t char(12);
+    dcl ld fixed bin(15);
+    dcl lt fixed bin(15);
+    d = date();
+    t = time();
+    ld = length(d);
+    lt = length(t);
+    put skip list('date len=', ld);
+    put skip list('time len=', lt);
+end test28;

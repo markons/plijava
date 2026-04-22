@@ -1,0 +1,6 @@
+test25: proc options(main);
+    dcl flag bit(1) init('1');
+    dcl off bit(1);
+    put skip list('flag=', flag);
+    put skip list('off=', off);
+end test25;

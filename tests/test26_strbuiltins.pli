@@ -1,0 +1,18 @@
+test26: proc options(main);
+    dcl s char(20);
+    dcl t char(20);
+    dcl r char(50);
+    dcl n fixed bin(15);
+    s = '  hello  ';
+    t = trim(s);
+    n = length(t);
+    put skip list('len=', n);
+    r = uppercase(t);
+    put skip list('upper=', r);
+    r = lowercase('WORLD');
+    put skip list('lower=', r);
+    r = repeat('ab', 3);
+    put skip list('rep=', r);
+    r = reverse('abcde');
+    put skip list('rev=', r);
+end test26;

@@ -1,5 +1,5 @@
   /* Test program for RETURNS clause */
-testret: proc options(main);
+ testret: proc options(main);
     dcl x fixed bin(15);
     dcl y fixed bin(15);
     dcl z fixed bin(31);
@@ -24,29 +24,29 @@ testret: proc options(main);
     put skip list('Result of concater a +  b :', c);
 
 /* Function that doubles a number */
-myfunc: proc(n) returns(fixed bin(31));
+ myfunc: proc(n) returns(fixed bin(31));
     dcl n fixed bin(15);
     dcl result fixed bin(31);
     result = n * 2;
     return(result);
-end;
+ end;
 
 /* Function that adds two numbers */
-adder: proc(a, b) returns(fixed bin(31));
+ adder: proc(a, b) returns(fixed bin(31));
     dcl a fixed bin(15);
     dcl b fixed bin(15);
     dcl sum fixed bin(31);
     sum = a + b;
     return(sum);
-end;
+ end;
 
-concater: proc(x, y) returns(char(10));
+ concater: proc(x, y) returns(char(10));
     dcl x            char(5);
 	dcl y            char(5);
     dcl z            char(10);
     
     z = x || y;
     return(z);
-end; 	
+ end; 	
 
-end testret;
+ end testret;

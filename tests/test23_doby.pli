@@ -1,0 +1,9 @@
+test23: proc options(main);
+    dcl i fixed bin(15);
+    do i = 1 to 10 by 2;
+        put skip list('odd:', i);
+    end;
+    do i = 0 to 20 by 5;
+        put skip list('by5:', i);
+    end;
+end test23;

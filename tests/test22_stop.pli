@@ -1,0 +1,5 @@
+test22: proc options(main);
+    put skip list('before stop');
+    stop;
+    put skip list('this should not appear');
+end test22;

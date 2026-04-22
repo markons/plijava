@@ -1,0 +1,8 @@
+test24: proc options(main);
+    dcl x fixed bin(15) init(42);
+    dcl s char(10) init('hello');
+    dcl big fixed bin(31) init(1000000);
+    put skip list('x=', x);
+    put skip list('s=', s);
+    put skip list('big=', big);
+end test24;
