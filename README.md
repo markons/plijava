@@ -66,6 +66,7 @@ Refer to `plijava.py` top comments and parser rules for more details and edge-ca
 1. `plijava.py` builds a PLY lexer and LALR(1) parser that walks PL/I source and emits Java source strings.
 2. The script writes the Java source to `<ClassName>.java`, optionally formats it with `astyle.exe`, then compiles with `javac` using a classpath that includes the `javalib` helpers.
 3. If compilation succeeds the produced class is executed with `java` and the program output is printed.
+4. As a final step, `plijava.py` spawns `show_side_by_side.py` (non-blocking) with the input PL/I file and the generated Java file so you can visually diff source and target.
 
 ## Running the transpiler
 
@@ -157,6 +158,11 @@ Example:
 ```powershell
 python show_side_by_side.py --pli pl1code/simple.pli --java MyProgram.java
 ```
+
+The viewer is now launched automatically as the final step of `plijava.py` after a
+successful transpile/compile/run, pre-loaded with the selected PL/I input and the
+generated `<procedure_name>.java`. It runs as a non-blocking subprocess, so the
+transpiler exits normally while the viewer window stays open.
 
 ## License
 

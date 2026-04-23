@@ -1821,19 +1821,23 @@ def pli_to_python(pl1_input):
 
 def execute_transpiler():
     """Executes the PL/I transpiler by selecting the file via file dialog."""
+    global pli_input_path
     file_path = select_file()  # This will open the dialog only once
     if not file_path:
         print("No file selected.")
+        pli_input_path = None
         return None
-    
+
+    pli_input_path = file_path
     # Read the PL/I input from the selected file
     pl1_code = read_pli_from_file(file_path)
     # Print or return the PL/I input code
-    print("Input PL/I Code:\n")    
+    print("Input PL/I Code:\n")
     print(pl1_code)
     return pl1_code
 
-pl1_code = execute_transpiler() 
+pli_input_path = None
+pl1_code = execute_transpiler()
 
 # =============================================================================
 # Call the (yacc) parser with or without trace
@@ -1958,7 +1962,20 @@ if result:
     #print(result)
     print("===Execution outputs:==========================")
     print('procedure_name:', procedure_name, flush=True)
-    execute_transpiler(result, procedure_name)    
+    execute_transpiler(result, procedure_name)
     print("==============================================")
+
+    # Final step: launch side-by-side viewer (PL/I source ↔ generated Java)
+    if pli_input_path:
+        import subprocess, sys, os
+        java_output_path = os.path.abspath(f"{procedure_name}.java")
+        viewer_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                     "show_side_by_side.py")
+        print("===Launching side-by-side viewer:==============")
+        print(f"  PL/I : {pli_input_path}")
+        print(f"  Java : {java_output_path}")
+        subprocess.Popen([sys.executable, viewer_script,
+                          "--pli", pli_input_path,
+                          "--java", java_output_path])
 else:
     print("Parsing failed.")
