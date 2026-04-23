@@ -456,11 +456,12 @@ global_strings = '''
 # Ignored characters (spaces and tabs)
 t_ignore = ' \t'
 
-# Block comment
+# Block comment — return the token so it reaches the parser, where dedicated
+# rules emit it as a Java comment in the generated output.
 def t_BLOCK_COMMENT(t):
     r'/\*([^*]|\*+[^*/])*\*+/'
-    #return t
-    pass  # Block comments are ignored
+    t.lexer.lineno += t.value.count('\n')
+    return t
 
 # Newline rule
 def t_newline(t):
@@ -568,8 +569,14 @@ def p_program(p):
     if random_class and uses_random:
         tail += random_class + "\n"
 
-    # Final class
+    # Final class. Prepend any top-of-file PL/I comments we stripped during
+    # preprocessing so they survive in the generated Java.
+    try:
+        leading_block = "\n".join(leading_comments) + "\n" if leading_comments else ""
+    except NameError:
+        leading_block = ""
     p[0] = (
+        f"{leading_block}"
         f"{main_code}\n"
         f"{internal_code}\n"
         f"{tail}"
@@ -581,10 +588,16 @@ def p_program(p):
 
 def p_external_proc_list(p):
     '''external_proc_list : external_proc_list proc_statement
+                          | external_proc_list BLOCK_COMMENT
+                          | BLOCK_COMMENT proc_statement
                           | proc_statement'''
     logger.debug('in external_proc_list: p values: %s', p[:])
     if len(p) == 3:
-        p[0] = p[1] + [p[2]]
+        # Either list + proc/comment, or comment + proc
+        if p.slice[1].type == 'BLOCK_COMMENT':
+            p[0] = [p[1], p[2]]
+        else:
+            p[0] = p[1] + [p[2]]
     else:
         p[0] = [p[1]]
 
@@ -810,20 +823,35 @@ def p_declaration_list(p):
     declaration_list : declaration SEMICOLON declaration_list
                      | declaration_list declaration SEMICOLON
                      | declaration SEMICOLON
+                     | BLOCK_COMMENT declaration_list
+                     | declaration_list BLOCK_COMMENT
                      | empty
     """
-    logger.debug('in declaration_list: p values: %s', p[:])   
+    logger.debug('in declaration_list: p values: %s', p[:])
     global all_dcls
     if len(p) == 2:  # empty
         p[0] = []
-    elif len(p) == 3:  # Single declaration
-        p[0] = [p[1]]
+    elif len(p) == 3:
+        # Either a single "declaration SEMICOLON" (p[1]=decl, p[2]=';')
+        # or a comment extension: "BLOCK_COMMENT declaration_list" / "declaration_list BLOCK_COMMENT"
+        t1 = p.slice[1].type
+        t2 = p.slice[2].type
+        if t1 == 'BLOCK_COMMENT':
+            # BLOCK_COMMENT declaration_list
+            p[0] = [p[1]] + (p[2] if isinstance(p[2], list) else [])
+        elif t2 == 'BLOCK_COMMENT':
+            # declaration_list BLOCK_COMMENT
+            base = p[1] if isinstance(p[1], list) else [p[1]]
+            p[0] = base + [p[2]]
+        else:
+            # declaration SEMICOLON
+            p[0] = [p[1]]
     elif len(p) == 4:  # Appending to list or prepending to list
         if p[1] == p.slice[1].type:  # If p[1] is a list (declaration_list)
             p[0] = p[1] + [p[2]]
         else:
             p[0] = [p[1]] + p[3]  # p[1] is a single declaration, p[3] is the list
-            
+
     all_dcls = ', '.join(p[0])
     logger.debug('all_dcls: %s', all_dcls)
 
@@ -1131,7 +1159,8 @@ def p_call_statement(p):
 def p_block_comment_statement(p):
     '''block_comment_statement : BLOCK_COMMENT'''
     logger.debug('in block_comment_statement: p values: %s', p[:])
-    p[0] = "//" + p[0]
+    # Java accepts PL/I /* ... */ verbatim, so pass the raw comment through.
+    p[0] = p[1]
 
 def p_assignment_statement(p):
     '''assignment_statement : variable_access ASSIGN expression SEMICOLON'''
@@ -1840,6 +1869,22 @@ pli_input_path = None
 pl1_code = execute_transpiler()
 
 # =============================================================================
+# Strip top-of-file /* ... */ block comments (grammar has no production for
+# comments before the main PROC header). Keep them so they can be re-emitted
+# as a leading Java comment block in the generated source.
+# =============================================================================
+leading_comments = []
+if pl1_code:
+    import re as _re_hdr
+    _hdr_pat = _re_hdr.compile(r'\s*/\*([^*]|\*+[^*/])*\*+/', _re_hdr.DOTALL)
+    while True:
+        m = _hdr_pat.match(pl1_code)
+        if not m:
+            break
+        leading_comments.append(m.group(0).strip())
+        pl1_code = pl1_code[m.end():]
+
+# =============================================================================
 # Call the (yacc) parser with or without trace
 # =============================================================================
 result = parser.parse(pl1_code)
@@ -1868,7 +1913,7 @@ def execute_transpiler(java_code, class_name):
     print("Where is Java:" + process.stdout)
     
     # Step 1: Write Java code to a file named after the class
-    java_filename = f"{class_name}.java"     
+    java_filename = f"{class_name}.java"
     print('java_filename:', java_filename, flush=True)
     with open(java_filename, "w") as file:
         file.write(java_code)

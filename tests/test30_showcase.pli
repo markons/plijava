@@ -1,0 +1,234 @@
+/*
+ *  test30_showcase.pli
+ *  Larger end-to-end demo exercising most features supported by plijava.
+ *  Covers: scalar/array/record-free dcls, init, bit, arithmetic, concat,
+ *          if/then/else, select/when/other, do while, do from/to, do..by,
+ *          leave, iterate, nested do..end block, internal void procedure,
+ *          internal typed function, string & math built-ins, date/time,
+ *          file I/O with an ON ENDFILE handler.
+ */
+test30: proc options(main);
+    /* ---- scalar declarations ---- */
+    dcl i          fixed bin(15);
+    dcl j          fixed bin(15);
+    dcl n          fixed bin(15);
+    dcl r          fixed bin(31);
+    dcl pos        fixed bin(15);
+    dcl len        fixed bin(15);
+    dcl m          fixed bin(15);
+    dcl total      fixed bin(31) init(0);
+    dcl counter    fixed bin(15) init(0);
+    dcl done       fixed bin(15) init(0);
+    dcl read_count fixed bin(15) init(0);
+
+    /* ---- char + bit ---- */
+    dcl part  char(20);
+    dcl word  char(20);
+    dcl msg   char(60);
+    dcl temp  char(60);
+    dcl line  char(80);
+    dcl buf   char(80);
+    dcl d     char(20);
+    dcl t     char(20);
+    dcl flag  bit(1) init('1');
+
+    /* ---- arrays ---- */
+    dcl nums(5)    fixed bin(15);
+    dcl grid(3,3)  fixed bin(15);
+    dcl names(3)   char(10);
+
+    put skip list('=== plijava showcase ===');
+
+    /* ---------- 1-D array ---------- */
+    do i = 1 to 5;
+        nums(i) = i * i;
+    end;
+    do i = 1 to 5;
+        n = nums(i);
+        put skip list('nums at', i, '=', n);
+    end;
+
+    /* ---------- 2-D array ---------- */
+    do i = 1 to 3;
+        do j = 1 to 3;
+            grid(i,j) = i * 10 + j;
+        end;
+    end;
+    n = grid(2,3);
+    put skip list('grid(2,3)=', n);
+
+    /* ---------- char array ---------- */
+    names(1) = 'alice';
+    names(2) = 'bob';
+    names(3) = 'carol';
+    do i = 1 to 3;
+        temp = names(i);
+        put skip list('name', i, '=', temp);
+    end;
+
+    /* ---------- concatenation + string built-ins ---------- */
+    part = 'hello';
+    word = 'world';
+    msg  = part || ' ' || word;
+    put skip list('msg=', msg);
+
+    temp = uppercase(msg);
+    put skip list('upper=', temp);
+
+    temp = lowercase('MIXED Case');
+    put skip list('lower=', temp);
+
+    temp = trim('  padded  ');
+    put skip list('trim=', temp);
+
+    len = length(msg);
+    put skip list('length=', len);
+
+    temp = substr(msg, 7, 5);
+    put skip list('substr=', temp);
+
+    pos = index(msg, 'world');
+    put skip list('index=', pos);
+
+    temp = repeat('ab', 4);
+    put skip list('repeat=', temp);
+
+    temp = reverse('abcdef');
+    put skip list('reverse=', temp);
+
+    /* ---------- math built-ins ---------- */
+    n = 0 - 42;
+    r = abs(n);
+    put skip list('abs=', r);
+
+    r = sqrt(81);
+    put skip list('sqrt=', r);
+
+    r = ceil(4);
+    put skip list('ceil=', r);
+
+    r = floor(9);
+    put skip list('floor=', r);
+
+    r = round(7);
+    put skip list('round=', r);
+
+    r = trunc(5);
+    put skip list('trunc=', r);
+
+    r = sign(n);
+    put skip list('sign=', r);
+
+    r = max(10, 25);
+    put skip list('max=', r);
+
+    r = min(10, 25);
+    put skip list('min=', r);
+
+    n = 17;
+    r = mod(n, 5);
+    put skip list('mod=', r);
+
+    /* ---------- decimal / random / date / time ---------- */
+    n = 12345;
+    temp = decimal(n);
+    put skip list('decimal=', temp);
+
+    r = random(100);
+    put skip list('random<100=', r);
+
+    d = date();
+    put skip list('date=', d);
+    t = time();
+    put skip list('time=', t);
+
+    /* ---------- bit value ---------- */
+    put skip list('flag=', flag);
+
+    /* ---------- if / then / else ---------- */
+    n = 7;
+    if n > 0 then put skip list('n is positive');
+    else put skip list('n is non-positive');
+
+    /* ---------- select / when / other ---------- */
+    i = 2;
+    select(i);
+        when(1) put skip list('case one');
+        when(2) put skip list('case two');
+        when(3) put skip list('case three');
+        other   put skip list('case other');
+    end;
+
+    /* ---------- do while with iterate + leave ---------- */
+    i = 0;
+    do while(i < 20);
+        i = i + 1;
+        m = mod(i, 2);
+        if m = 0 then iterate;
+        else counter = counter;
+        if i > 9 then leave;
+        else counter = counter + 1;
+    end;
+    put skip list('odd count up to limit=', counter);
+
+    /* ---------- do from..to by ---------- */
+    total = 0;
+    do i = 1 to 10 by 2;
+        total = total + i;
+    end;
+    put skip list('sum of odds 1..10=', total);
+
+    /* ---------- nested do..end block inside if ---------- */
+    i = 5;
+    if i > 0 then do;
+        put skip list('positive branch');
+        j = i * 2;
+        put skip list('doubled=', j);
+    end;
+    else put skip list('non-positive branch');
+
+    /* ---------- internal void procedure (call) ---------- */
+    call greet(part);
+
+    /* ---------- internal typed function (assign then print) ---------- */
+    r = square(7);
+    put skip list('square(7)=', r);
+
+    /* ---------- file I/O with ON ENDFILE ---------- */
+    open file('showcase_io') output;
+    buf = 'line 1 payload';
+    write file('showcase_io') from(buf);
+    buf = 'line 2 payload';
+    write file('showcase_io') from(buf);
+    buf = 'line 3 payload';
+    write file('showcase_io') from(buf);
+    close file('showcase_io');
+
+    open file('showcase_io') input;
+    on endfile('showcase_io') done = 1;
+    do while(done = 0);
+        read file('showcase_io') into(line);
+        if done = 0 then read_count = read_count + 1;
+        else read_count = read_count;
+    end;
+    close file('showcase_io');
+    put skip list('lines read=', read_count);
+
+    put skip list('=== end of showcase ===');
+
+/* ---------- internal procedures ---------- */
+greet: proc(who);
+    dcl who   char(20);
+    dcl hello char(40);
+    hello = 'hello, ' || who;
+    put skip list(hello);
+end;
+
+square: proc(x) returns(fixed bin(15));
+    dcl x fixed bin(15);
+    dcl s fixed bin(15);
+    s = x * x;
+    return(s);
+end;
+
+end test30;
